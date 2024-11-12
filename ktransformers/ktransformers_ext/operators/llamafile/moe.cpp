@@ -171,109 +171,267 @@ void MOE::forward_one(int k, const uint64_t* expert_ids, const float* weights, c
     }
 }
 
-void MOE::forward_many(int qlen, int k, const uint64_t* expert_ids, const float* weights, const void* input, void* output, Backend* backend) {
+void MOE::forward_many(int qlen, int k, const uint64_t* expert_ids, const uint64_t* size_per_token, const float* weights, const void* input, void* output, Backend* backend) {
+    // 初始化每个专家对应的本地计数，用于统计每个专家需要处理的 token 数量
     for (int i = 0; i < config_.expert_num; i++) {
         m_local_num_[i] = 0;
     }
+
+    // 为每个 token 构建 m_local_pos_，记录每个 token 在对应专家中的位置
     for (int i = 0; i < qlen; i++) {
-        for (int j = 0; j < k; j++) {
+        int s = size_per_token[i];
+        for (int j = 0; j < s; j++) {
+            // 更新每个专家的 token 数量，并记录位置
             m_local_pos_[i][j] = m_local_num_[expert_ids[i * k + j]]++;
         }
     }
+
     uint64_t offset = 0;
+    // 计算每个专家在连续内存中的偏移量，初始化各个指针
     for (int i = 0; i < config_.expert_num; i++) {
-        m_local_gate_input_ptr_[i] = m_local_gate_input_ + offset * config_.hidden_size * ggml_type_size(ggml_internal_get_type_traits(config_.gate_type).vec_dot_type) / ggml_blck_size(ggml_internal_get_type_traits(config_.gate_type).vec_dot_type);
-        m_local_up_input_ptr_[i] = m_local_up_input_ + offset * config_.hidden_size * ggml_type_size(ggml_internal_get_type_traits(config_.up_type).vec_dot_type) / ggml_blck_size(ggml_internal_get_type_traits(config_.up_type).vec_dot_type);
+        m_local_gate_input_ptr_[i] = m_local_gate_input_ + offset * config_.hidden_size *
+            ggml_type_size(ggml_internal_get_type_traits(config_.gate_type).vec_dot_type) /
+            ggml_blck_size(ggml_internal_get_type_traits(config_.gate_type).vec_dot_type);
+        m_local_up_input_ptr_[i] = m_local_up_input_ + offset * config_.hidden_size *
+            ggml_type_size(ggml_internal_get_type_traits(config_.up_type).vec_dot_type) /
+            ggml_blck_size(ggml_internal_get_type_traits(config_.up_type).vec_dot_type);
         m_local_gate_output_ptr_[i] = m_local_gate_output_ + offset * config_.intermediate_size;
         m_local_up_output_ptr_[i] = m_local_up_output_ + offset * config_.intermediate_size;
         m_local_intermediate_fp32_ptr_[i] = m_local_intermediate_fp32_ + offset * config_.intermediate_size;
-        m_local_down_input_ptr_[i] = m_local_down_input_ + offset * config_.intermediate_size * ggml_type_size(ggml_internal_get_type_traits(config_.down_type).vec_dot_type) / ggml_blck_size(ggml_internal_get_type_traits(config_.down_type).vec_dot_type);
+        m_local_down_input_ptr_[i] = m_local_down_input_ + offset * config_.intermediate_size *
+            ggml_type_size(ggml_internal_get_type_traits(config_.down_type).vec_dot_type) /
+            ggml_blck_size(ggml_internal_get_type_traits(config_.down_type).vec_dot_type);
         m_local_down_output_ptr_[i] = m_local_down_output_ + offset * config_.hidden_size;
         offset += m_local_num_[i];
     }
+
+    // 准备每个 token 的输入数据，转换数据类型并复制到对应的专家输入缓冲区
     backend->do_work_stealing_job(qlen, nullptr, [&](int i) {
         const void* gate_input_ptr;
         const void* up_input_ptr;
-        if (config_.hidden_type == ggml_internal_get_type_traits(config_.gate_type).vec_dot_type && config_.hidden_type == ggml_internal_get_type_traits(config_.up_type).vec_dot_type) {
-            gate_input_ptr = up_input_ptr = (uint8_t*)input + i * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type);
+
+        // 检查数据类型是否一致，如果一致，直接使用输入指针
+        if (config_.hidden_type == ggml_internal_get_type_traits(config_.gate_type).vec_dot_type &&
+            config_.hidden_type == ggml_internal_get_type_traits(config_.up_type).vec_dot_type) {
+            gate_input_ptr = up_input_ptr = (uint8_t*)input + i * config_.hidden_size *
+                ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type);
         } else {
-            to_float((uint8_t*)input + i * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), m_input_fp32_[i], config_.hidden_size, config_.hidden_type);
-            if (ggml_internal_get_type_traits(config_.gate_type).vec_dot_type == ggml_internal_get_type_traits(config_.up_type).vec_dot_type) {
-                from_float(m_input_fp32_[i], m_gate_input_[i], config_.hidden_size, ggml_internal_get_type_traits(config_.gate_type).vec_dot_type);
+            // 如果数据类型不一致，进行类型转换
+            to_float(
+                (uint8_t*)input + i * config_.hidden_size *
+                ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type),
+                m_input_fp32_[i],
+                config_.hidden_size,
+                config_.hidden_type
+            );
+            if (ggml_internal_get_type_traits(config_.gate_type).vec_dot_type ==
+                ggml_internal_get_type_traits(config_.up_type).vec_dot_type) {
+                from_float(
+                    m_input_fp32_[i],
+                    m_gate_input_[i],
+                    config_.hidden_size,
+                    ggml_internal_get_type_traits(config_.gate_type).vec_dot_type
+                );
                 gate_input_ptr = up_input_ptr = m_gate_input_[i];
             } else {
                 if (config_.hidden_type != ggml_internal_get_type_traits(config_.gate_type).vec_dot_type) {
-                    from_float(m_input_fp32_[i], m_gate_input_[i], config_.hidden_size, ggml_internal_get_type_traits(config_.gate_type).vec_dot_type);
+                    from_float(
+                        m_input_fp32_[i],
+                        m_gate_input_[i],
+                        config_.hidden_size,
+                        ggml_internal_get_type_traits(config_.gate_type).vec_dot_type
+                    );
                     gate_input_ptr = m_gate_input_[i];
                 } else {
-                    gate_input_ptr = (uint8_t*)input + i * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type);
+                    gate_input_ptr = (uint8_t*)input + i * config_.hidden_size *
+                        ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type);
                 }
                 if (config_.hidden_type != ggml_internal_get_type_traits(config_.up_type).vec_dot_type) {
-                    from_float(m_input_fp32_[i], m_up_input_[i], config_.hidden_size, ggml_internal_get_type_traits(config_.up_type).vec_dot_type);
+                    from_float(
+                        m_input_fp32_[i],
+                        m_up_input_[i],
+                        config_.hidden_size,
+                        ggml_internal_get_type_traits(config_.up_type).vec_dot_type
+                    );
                     up_input_ptr = m_up_input_[i];
                 } else {
-                    up_input_ptr = (uint8_t*)input + i * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type);
+                    up_input_ptr = (uint8_t*)input + i * config_.hidden_size *
+                        ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type);
                 }
             }
         }
-        for (int j = 0; j < k; j++) {
-            memcpy(m_local_gate_input_ptr_[expert_ids[i * k + j]] + m_local_pos_[i][j] * config_.hidden_size * ggml_type_size(ggml_internal_get_type_traits(config_.gate_type).vec_dot_type) / ggml_blck_size(ggml_internal_get_type_traits(config_.gate_type).vec_dot_type), gate_input_ptr, config_.hidden_size * ggml_type_size(ggml_internal_get_type_traits(config_.gate_type).vec_dot_type) / ggml_blck_size(ggml_internal_get_type_traits(config_.gate_type).vec_dot_type));
-            memcpy(m_local_up_input_ptr_[expert_ids[i * k + j]] + m_local_pos_[i][j] * config_.hidden_size * ggml_type_size(ggml_internal_get_type_traits(config_.up_type).vec_dot_type) / ggml_blck_size(ggml_internal_get_type_traits(config_.up_type).vec_dot_type), up_input_ptr, config_.hidden_size * ggml_type_size(ggml_internal_get_type_traits(config_.up_type).vec_dot_type) / ggml_blck_size(ggml_internal_get_type_traits(config_.up_type).vec_dot_type));
+
+        // 将输入数据复制到对应的专家输入缓冲区
+        int s = size_per_token[i];
+        for (int j = 0; j < s; j++) {
+            memcpy(
+                m_local_gate_input_ptr_[expert_ids[i * k + j]] + m_local_pos_[i][j] * config_.hidden_size *
+                ggml_type_size(ggml_internal_get_type_traits(config_.gate_type).vec_dot_type) /
+                ggml_blck_size(ggml_internal_get_type_traits(config_.gate_type).vec_dot_type),
+                gate_input_ptr,
+                config_.hidden_size * ggml_type_size(ggml_internal_get_type_traits(config_.gate_type).vec_dot_type) /
+                ggml_blck_size(ggml_internal_get_type_traits(config_.gate_type).vec_dot_type)
+            );
+            memcpy(
+                m_local_up_input_ptr_[expert_ids[i * k + j]] + m_local_pos_[i][j] * config_.hidden_size *
+                ggml_type_size(ggml_internal_get_type_traits(config_.up_type).vec_dot_type) /
+                ggml_blck_size(ggml_internal_get_type_traits(config_.up_type).vec_dot_type),
+                up_input_ptr,
+                config_.hidden_size * ggml_type_size(ggml_internal_get_type_traits(config_.up_type).vec_dot_type) /
+                ggml_blck_size(ggml_internal_get_type_traits(config_.up_type).vec_dot_type)
+            );
         }
     }, nullptr);
+
     int stride = QK_K;
     int nth = config_.intermediate_size / stride;
+
+    // 执行每个专家的 gate 和 up 投影运算
     backend->do_work_stealing_job(nth * config_.expert_num, nullptr, [&](int task_id) {
-        int expert_idx = task_id / nth;
-        int ith = task_id % nth;
+        int expert_idx = task_id / nth;   // 当前专家索引
+        int ith = task_id % nth;          // 当前任务在专家中的位置
+
         void* gate_input_ptr = m_local_gate_input_ptr_[expert_idx];
-        void* gate_proj_ptr = (uint8_t*)gate_proj_ + (expert_idx * config_.intermediate_size + ith * stride) * config_.hidden_size * ggml_type_size(config_.gate_type) / ggml_blck_size(config_.gate_type);
+        void* gate_proj_ptr = (uint8_t*)gate_proj_ + 
+            (expert_idx * config_.intermediate_size + ith * stride) * config_.hidden_size *
+            ggml_type_size(config_.gate_type) / ggml_blck_size(config_.gate_type);
         float* gate_output_ptr = m_local_gate_output_ptr_[expert_idx] + ith * stride;
-        llamafile_sgemm(stride, m_local_num_[expert_idx], config_.hidden_size / ggml_blck_size(config_.gate_type), gate_proj_ptr, config_.hidden_size / ggml_blck_size(config_.gate_type), gate_input_ptr, config_.hidden_size / ggml_blck_size(config_.gate_type), gate_output_ptr, config_.intermediate_size, 0, 1, GGML_TASK_TYPE_COMPUTE, config_.gate_type, ggml_internal_get_type_traits(config_.gate_type).vec_dot_type, GGML_TYPE_F32, GGML_PREC_DEFAULT);
+
+        // 进行 gate 投影的矩阵乘法
+        llamafile_sgemm(
+            stride,
+            m_local_num_[expert_idx],
+            config_.hidden_size / ggml_blck_size(config_.gate_type),
+            gate_proj_ptr,
+            config_.hidden_size / ggml_blck_size(config_.gate_type),
+            gate_input_ptr,
+            config_.hidden_size / ggml_blck_size(config_.gate_type),
+            gate_output_ptr,
+            config_.intermediate_size,
+            0,
+            1,
+            GGML_TASK_TYPE_COMPUTE,
+            config_.gate_type,
+            ggml_internal_get_type_traits(config_.gate_type).vec_dot_type,
+            GGML_TYPE_F32,
+            GGML_PREC_DEFAULT
+        );
+
         void* up_input_ptr = m_local_up_input_ptr_[expert_idx];
-        void* up_proj_ptr = (uint8_t*)up_proj_ + (expert_idx * config_.intermediate_size + ith * stride) * config_.hidden_size * ggml_type_size(config_.up_type) / ggml_blck_size(config_.up_type);
+        void* up_proj_ptr = (uint8_t*)up_proj_ + 
+            (expert_idx * config_.intermediate_size + ith * stride) * config_.hidden_size *
+            ggml_type_size(config_.up_type) / ggml_blck_size(config_.up_type);
         float* up_output_ptr = m_local_up_output_ptr_[expert_idx] + ith * stride;
-        llamafile_sgemm(stride, m_local_num_[expert_idx], config_.hidden_size / ggml_blck_size(config_.up_type), up_proj_ptr, config_.hidden_size / ggml_blck_size(config_.up_type), up_input_ptr, config_.hidden_size / ggml_blck_size(config_.up_type), up_output_ptr, config_.intermediate_size, 0, 1, GGML_TASK_TYPE_COMPUTE, config_.up_type, ggml_internal_get_type_traits(config_.up_type).vec_dot_type, GGML_TYPE_F32, GGML_PREC_DEFAULT);
+
+        // 进行 up 投影的矩阵乘法
+        llamafile_sgemm(
+            stride,
+            m_local_num_[expert_idx],
+            config_.hidden_size / ggml_blck_size(config_.up_type),
+            up_proj_ptr,
+            config_.hidden_size / ggml_blck_size(config_.up_type),
+            up_input_ptr,
+            config_.hidden_size / ggml_blck_size(config_.up_type),
+            up_output_ptr,
+            config_.intermediate_size,
+            0,
+            1,
+            GGML_TASK_TYPE_COMPUTE,
+            config_.up_type,
+            ggml_internal_get_type_traits(config_.up_type).vec_dot_type,
+            GGML_TYPE_F32,
+            GGML_PREC_DEFAULT
+        );
+
+        // 对结果应用激活函数并准备 down 投影的输入
         for (int i = 0; i < m_local_num_[expert_idx]; i++) {
             for (int j = ith * stride; j < (ith + 1) * stride; j++) {
-                m_local_intermediate_fp32_ptr_[expert_idx][i * config_.intermediate_size + j] = act_fn(m_local_gate_output_ptr_[expert_idx][i * config_.intermediate_size + j]) * m_local_up_output_ptr_[expert_idx][i * config_.intermediate_size + j];
+                m_local_intermediate_fp32_ptr_[expert_idx][i * config_.intermediate_size + j] =
+                    act_fn(m_local_gate_output_ptr_[expert_idx][i * config_.intermediate_size + j]) *
+                    m_local_up_output_ptr_[expert_idx][i * config_.intermediate_size + j];
             }
             float* intermediate_fp32_ptr = m_local_intermediate_fp32_ptr_[expert_idx] + i * config_.intermediate_size + ith * stride;
-            void* down_input_ptr = m_local_down_input_ptr_[expert_idx] + i * config_.intermediate_size * ggml_type_size(ggml_internal_get_type_traits(config_.down_type).vec_dot_type) / ggml_blck_size(ggml_internal_get_type_traits(config_.down_type).vec_dot_type) + ith * stride * ggml_type_size(ggml_internal_get_type_traits(config_.down_type).vec_dot_type) / ggml_blck_size(ggml_internal_get_type_traits(config_.down_type).vec_dot_type);
-            from_float(intermediate_fp32_ptr, down_input_ptr, stride, ggml_internal_get_type_traits(config_.down_type).vec_dot_type);
+            void* down_input_ptr = m_local_down_input_ptr_[expert_idx] + i * config_.intermediate_size *
+                ggml_type_size(ggml_internal_get_type_traits(config_.down_type).vec_dot_type) /
+                ggml_blck_size(ggml_internal_get_type_traits(config_.down_type).vec_dot_type) +
+                ith * stride * ggml_type_size(ggml_internal_get_type_traits(config_.down_type).vec_dot_type) /
+                ggml_blck_size(ggml_internal_get_type_traits(config_.down_type).vec_dot_type);
+
+            // 将中间结果转换为 down 投影所需的数据类型
+            from_float(intermediate_fp32_ptr, down_input_ptr, stride,
+                       ggml_internal_get_type_traits(config_.down_type).vec_dot_type);
         }
     }, nullptr);
+
     stride = QK_K;
     nth = config_.hidden_size / stride;
+
+    // 执行每个专家的 down 投影运算
     backend->do_work_stealing_job(nth * config_.expert_num, nullptr, [&](int task_id) {
-        int expert_idx = task_id / nth;
-        int ith = task_id % nth;
+        int expert_idx = task_id / nth;  // 当前专家索引
+        int ith = task_id % nth;         // 当前任务在专家中的位置
+
         void* down_input_ptr = m_local_down_input_ptr_[expert_idx];
-        void* down_proj_ptr = (uint8_t*)down_proj_ + (expert_idx * config_.hidden_size + ith * stride) * config_.intermediate_size * ggml_type_size(config_.down_type) / ggml_blck_size(config_.down_type);
+        void* down_proj_ptr = (uint8_t*)down_proj_ +
+            (expert_idx * config_.hidden_size + ith * stride) * config_.intermediate_size *
+            ggml_type_size(config_.down_type) / ggml_blck_size(config_.down_type);
         float* down_output_ptr = m_local_down_output_ptr_[expert_idx] + ith * stride;
-        llamafile_sgemm(stride, m_local_num_[expert_idx], config_.intermediate_size / ggml_blck_size(config_.down_type), down_proj_ptr, config_.intermediate_size / ggml_blck_size(config_.down_type), down_input_ptr, config_.intermediate_size / ggml_blck_size(config_.down_type), down_output_ptr, config_.hidden_size, 0, 1, GGML_TASK_TYPE_COMPUTE, config_.down_type, ggml_internal_get_type_traits(config_.down_type).vec_dot_type, GGML_TYPE_F32, GGML_PREC_DEFAULT);
+
+        // 进行 down 投影的矩阵乘法
+        llamafile_sgemm(
+            stride,
+            m_local_num_[expert_idx],
+            config_.intermediate_size / ggml_blck_size(config_.down_type),
+            down_proj_ptr,
+            config_.intermediate_size / ggml_blck_size(config_.down_type),
+            down_input_ptr,
+            config_.intermediate_size / ggml_blck_size(config_.down_type),
+            down_output_ptr,
+            config_.hidden_size,
+            0,
+            1,
+            GGML_TASK_TYPE_COMPUTE,
+            config_.down_type,
+            ggml_internal_get_type_traits(config_.down_type).vec_dot_type,
+            GGML_TYPE_F32,
+            GGML_PREC_DEFAULT
+        );
     }, nullptr);
+
+    // 汇总每个 token 的输出
     backend->do_work_stealing_job(qlen, nullptr, [&](int i) {
+        // 初始化输出为 0
         for (int e = 0; e < config_.hidden_size; e++) {
             m_output_fp32_[i][e] = 0;
         }
-        for (int j = 0; j < k; j++) {
+        // 对每个专家的输出进行加权累加
+        int s = size_per_token[i];
+        for (int j = 0; j < s; j++) {
             for (int e = 0; e < config_.hidden_size; e++) {
-                m_output_fp32_[i][e] += m_local_down_output_ptr_[expert_ids[i * k + j]][m_local_pos_[i][j] * config_.hidden_size + e] * weights[i * k + j];
+                m_output_fp32_[i][e] += m_local_down_output_ptr_[expert_ids[i * k + j]][m_local_pos_[i][j] * config_.hidden_size + e] *
+                    weights[i * k + j];
             }
         }
-        from_float(m_output_fp32_[i], (uint8_t*)output + i * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), config_.hidden_size, config_.hidden_type);
+        // 将结果转换为指定的数据类型并写入输出
+        from_float(
+            m_output_fp32_[i],
+            (uint8_t*)output + i * config_.hidden_size * ggml_type_size(config_.hidden_type) /
+            ggml_blck_size(config_.hidden_type),
+            config_.hidden_size,
+            config_.hidden_type
+        );
     }, nullptr);
 }
 
-void MOE::forward(int qlen, int k, const uint64_t* expert_ids, const float* weights, const void* input, void* output, Backend* backend) {
+void MOE::forward(int qlen, int k, const uint64_t* expert_ids, const uint64_t* size_per_token, const float* weights, const void* input, void* output, Backend* backend) {
     if (qlen < config_.group_min_len) {
         for (int i = 0; i < qlen; i++) {
-            forward_one(k, expert_ids + i * k, weights + i * k, (uint8_t*)input + i * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), (uint8_t*)output + i * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), backend);
+            int s = size_per_token[i];
+            forward_one(s, expert_ids + i * k, weights + i * k, (uint8_t*)input + i * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), (uint8_t*)output + i * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), backend);
         }
         return;
     }
     int forward_len = std::min(config_.group_max_len, qlen);
-    forward_many(forward_len, k, expert_ids, weights, input, output, backend);
-    forward(qlen - forward_len, k, expert_ids + forward_len * k, weights + forward_len * k, (uint8_t*)input + forward_len * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), (uint8_t*)output + forward_len * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), backend);
+    forward_many(forward_len, k, expert_ids, size_per_token, weights, input, output, backend);
+    forward(qlen - forward_len, k, expert_ids + forward_len * k, size_per_token + forward_len, weights + forward_len * k, (uint8_t*)input + forward_len * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), (uint8_t*)output + forward_len * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), backend);
 }

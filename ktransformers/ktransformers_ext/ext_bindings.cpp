@@ -532,6 +532,7 @@ class MOEBindings {
             MOE *moe;
             int qlen;
             int k;
+            const uint64_t *size_per_token;
             const uint64_t *expert_ids;
             const float *weights;
             const void *input;
@@ -541,19 +542,21 @@ class MOEBindings {
             Args *args_ = (Args *)args;
             args_->cpuinfer->enqueue(
                 &MOE::forward, args_->moe, args_->qlen, args_->k,
-                args_->expert_ids, args_->weights, args_->input, args_->output);
+                args_->expert_ids, args_->size_per_token, args_->weights, args_->input, args_->output);
         }
         static std::pair<intptr_t, intptr_t>
-        cpuinfer_interface(MOE &moe, int qlen, int k, intptr_t expert_ids,
+        cpuinfer_interface(MOE &moe, int qlen, int k, intptr_t expert_ids, intptr_t size_per_token,
                            intptr_t weights, intptr_t input, intptr_t output) {
             Args *args = new Args{nullptr,
                                   &moe,
                                   qlen,
                                   k,
+                                  (const uint64_t *)size_per_token,
                                   (const uint64_t *)expert_ids,
                                   (const float *)weights,
                                   (const void *)input,
-                                  (void *)output};
+                                  (void *)output
+                                  };
             return std::make_pair((intptr_t)&inner, (intptr_t)args);
         }
     };

@@ -19,3 +19,5 @@ ktransformers/server/local_store/
 ktransformers/server_test1.db
 *.patch
 img/
+*.log
+*GGUF

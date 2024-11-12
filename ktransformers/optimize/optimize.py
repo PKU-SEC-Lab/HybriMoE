@@ -29,11 +29,11 @@ def inject(module, local_optimization_dict, model_config:AutoConfig ,gguf_loader
                     gguf_loader.tensor_device_map[inject_module_meta["key"]] = inject_module_meta["kwargs"] if "kwargs" in inject_module_meta else dict()
                     import_class_name = import_path[-1]
                     module_cls=getattr(__import__(import_module_name, fromlist=[""]), import_class_name)
-                    print(f"Injecting {child_prefix} as", import_module_name, ".", import_class_name)
+                    # print(f"Injecting {child_prefix} as", import_module_name, ".", import_class_name)
                     inject_module=module_cls(key = inject_module_meta["key"], gguf_loader = gguf_loader, config = model_config, orig_module=child, **inject_module_meta["kwargs"])
                     set_module(module, name, inject_module)
                 elif inject_module_meta["class"] == "default":
-                    print(f"Injecting {child_prefix} as default")
+                    # print(f"Injecting {child_prefix} as default")
                     gguf_loader.tensor_device_map[inject_module_meta["key"]] = inject_module_meta["kwargs"] if "kwargs" in inject_module_meta else dict()
                 else:
                     raise Exception("inject_module_meta[\"class\"] must be \"default\" or a class path")
@@ -114,19 +114,81 @@ def translate_model_config(model_config: PretrainedConfig):
     return model_config
 
 
-def optimize_and_load_gguf(module: nn.Module, rule_file: str, gguf_path: str, model_config: PretrainedConfig, default_device: str = "cuda:0"):
-    with open(rule_file, 'r', encoding='utf-8') as f:
+def optimize_and_load_gguf(
+    module: nn.Module,
+    rule_file: str,
+    gguf_path: str,
+    model_config: PretrainedConfig,
+    default_device: str = "cuda:0",
+):
+    with open(rule_file, "r", encoding="utf-8") as f:
         rule_list = yaml.load(f.read(), Loader=yaml.FullLoader)
-    
+
     optimize_config = dict()
-    gen_optimize_config(module, optimize_config, rule_list, default_device = default_device)
-    
+    gen_optimize_config(
+        module, optimize_config, rule_list, default_device=default_device
+    )
+
+    device_usage, use_gpu = get_device_usage(optimize_config)
+    model_config.device_usage = device_usage
+
     model_config = translate_model_config(model_config)
 
-    gguf_loader=GGUFLoader(gguf_path)
+    gguf_loader = GGUFLoader(gguf_path)
     with torch.device("meta"):
         inject(module, optimize_config, model_config, gguf_loader)
     load_weights(module, gguf_loader)
+
     module.gguf_loader = gguf_loader
     del_meta(module)
     torch.cuda.empty_cache()
+
+
+def get_device_usage(optimize_config):
+    # 得到每层使用的设备
+    device_usage = {}
+    layers = []
+    use_gpu = False
+    for key, value in optimize_config.items():
+        # 如果key里出现layers.1这类的
+        if "layers." in key and "experts" in key:
+            # 是layers的下一个
+            keys = key.split(".")
+            layer_idx = int(keys[keys.index("layers") + 1])
+            if layer_idx not in layers:
+                layers.append(layer_idx)
+            else:
+                continue
+            device = value["kwargs"]["generate_device"]
+            if device not in device_usage:
+                if device.startswith("cuda"):
+                    use_gpu = True
+                device_usage[device] = []
+            device_usage[device].append(layer_idx)
+    return device_usage, use_gpu
+
+
+class KDevicesCollector:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(KDevicesCollector, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        if not hasattr(self, "initialized"):
+            self.devices = {}
+            self.initialized = True
+
+    def add_device(self, layer_idx, device):
+        if device not in self.devices:
+            self.devices[device] = []
+        self.devices[device].append(layer_idx)
+
+    def get_devices(self):
+        return self.devices
+
+    @classmethod
+    def destroy_instance(cls):
+        cls._instance = None

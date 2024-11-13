@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding=utf-8
-'''
-Description  :  
+"""
+Description  :
 Author       : Azure-Tang, Boxin Zhang, chenht2022
 Date         : 2024-07-26 08:48:54
 Version      : 1.0.0
@@ -10,8 +10,8 @@ LastEditTime : 2024-08-14 08:20:45
 Adapted from https://github.com/99991/pygguf/blob/main/gguf.py
 Copyright (c) 2023-2024 The ggml authors
 Copyright (c) 2024 Thomas Germer
-Copyright (c) 2024 by KVCache.AI, All Rights Reserved. 
-'''
+Copyright (c) 2024 by KVCache.AI, All Rights Reserved.
+"""
 # copied from llama.cpp/gguf-py/gguf/constants.py to satisfy dependence of gguf
 # GGUF specification
 # https://github.com/ggerganov/ggml/blob/master/docs/gguf.md
@@ -26,76 +26,82 @@ from enum import IntEnum
 import torch
 import KTransformersOps
 
+
 class GGMLQuantizationType(IntEnum):
-    F32     = 0
-    F16     = 1
-    Q4_0    = 2
-    Q4_1    = 3
-    Q5_0    = 6
-    Q5_1    = 7
-    Q8_0    = 8
-    Q8_1    = 9
-    Q2_K    = 10
-    Q3_K    = 11
-    Q4_K    = 12
-    Q5_K    = 13
-    Q6_K    = 14
-    Q8_K    = 15
+    F32 = 0
+    F16 = 1
+    Q4_0 = 2
+    Q4_1 = 3
+    Q5_0 = 6
+    Q5_1 = 7
+    Q8_0 = 8
+    Q8_1 = 9
+    Q2_K = 10
+    Q3_K = 11
+    Q4_K = 12
+    Q5_K = 13
+    Q6_K = 14
+    Q8_K = 15
     IQ2_XXS = 16
-    IQ2_XS  = 17
+    IQ2_XS = 17
     IQ3_XXS = 18
-    IQ1_S   = 19
-    IQ4_NL  = 20
-    IQ3_S   = 21
-    IQ2_S   = 22
-    IQ4_XS  = 23
-    I8      = 24
-    I16     = 25
-    I32     = 26
-    I64     = 27
-    F64     = 28
-    IQ1_M   = 29
-    BF16    = 30
+    IQ1_S = 19
+    IQ4_NL = 20
+    IQ3_S = 21
+    IQ2_S = 22
+    IQ4_XS = 23
+    I8 = 24
+    I16 = 25
+    I32 = 26
+    I64 = 27
+    F64 = 28
+    IQ1_M = 29
+    BF16 = 30
+
 
 QK_K = 256
 GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
-    GGMLQuantizationType.F32:     (1, 4),
-    GGMLQuantizationType.F16:     (1, 2),
-    GGMLQuantizationType.Q4_0:    (32, 2 + 16),
-    GGMLQuantizationType.Q4_1:    (32, 2 + 2 + 16),
-    GGMLQuantizationType.Q5_0:    (32, 2 + 4 + 16),
-    GGMLQuantizationType.Q5_1:    (32, 2 + 2 + 4 + 16),
-    GGMLQuantizationType.Q8_0:    (32, 2 + 32),
-    GGMLQuantizationType.Q8_1:    (32, 4 + 4 + 32),
-    GGMLQuantizationType.Q2_K:    (256, 2 + 2 + QK_K // 16 + QK_K // 4),
-    GGMLQuantizationType.Q3_K:    (256, 2 + QK_K // 4 + QK_K // 8 + 12),
-    GGMLQuantizationType.Q4_K:    (256, 2 + 2 + QK_K // 2 + 12),
-    GGMLQuantizationType.Q5_K:    (256, 2 + 2 + QK_K // 2 + QK_K // 8 + 12),
-    GGMLQuantizationType.Q6_K:    (256, 2 + QK_K // 2 + QK_K // 4 + QK_K // 16),
-    GGMLQuantizationType.Q8_K:    (256, 4 + QK_K + QK_K // 8),
+    GGMLQuantizationType.F32: (1, 4),
+    GGMLQuantizationType.F16: (1, 2),
+    GGMLQuantizationType.Q4_0: (32, 2 + 16),
+    GGMLQuantizationType.Q4_1: (32, 2 + 2 + 16),
+    GGMLQuantizationType.Q5_0: (32, 2 + 4 + 16),
+    GGMLQuantizationType.Q5_1: (32, 2 + 2 + 4 + 16),
+    GGMLQuantizationType.Q8_0: (32, 2 + 32),
+    GGMLQuantizationType.Q8_1: (32, 4 + 4 + 32),
+    GGMLQuantizationType.Q2_K: (256, 2 + 2 + QK_K // 16 + QK_K // 4),
+    GGMLQuantizationType.Q3_K: (256, 2 + QK_K // 4 + QK_K // 8 + 12),
+    GGMLQuantizationType.Q4_K: (256, 2 + 2 + QK_K // 2 + 12),
+    GGMLQuantizationType.Q5_K: (256, 2 + 2 + QK_K // 2 + QK_K // 8 + 12),
+    GGMLQuantizationType.Q6_K: (256, 2 + QK_K // 2 + QK_K // 4 + QK_K // 16),
+    GGMLQuantizationType.Q8_K: (256, 4 + QK_K + QK_K // 8),
     GGMLQuantizationType.IQ2_XXS: (256, 2 + QK_K // 4),
-    GGMLQuantizationType.IQ2_XS:  (256, 2 + QK_K // 4 + QK_K // 32),
+    GGMLQuantizationType.IQ2_XS: (256, 2 + QK_K // 4 + QK_K // 32),
     GGMLQuantizationType.IQ3_XXS: (256, 2 + QK_K // 4 + QK_K // 8),
-    GGMLQuantizationType.IQ1_S:   (256, 2 + QK_K // 8 + QK_K // 16),
-    GGMLQuantizationType.IQ4_NL:  (32, 2 + 16),
-    GGMLQuantizationType.IQ3_S:   (256, 2 + QK_K // 4 + QK_K // 8 + QK_K // 32 + 4),
-    GGMLQuantizationType.IQ2_S:   (256, 2 + QK_K // 4 + QK_K // 16),
-    GGMLQuantizationType.IQ4_XS:  (256, 2 + 2 + QK_K // 2 + QK_K // 64),
-    GGMLQuantizationType.I8:      (1, 1),
-    GGMLQuantizationType.I16:     (1, 2),
-    GGMLQuantizationType.I32:     (1, 4),
-    GGMLQuantizationType.I64:     (1, 8),
-    GGMLQuantizationType.F64:     (1, 8),
-    GGMLQuantizationType.IQ1_M:   (256, QK_K // 8 + QK_K // 16  + QK_K // 32),
-    GGMLQuantizationType.BF16:    (1, 2),
+    GGMLQuantizationType.IQ1_S: (256, 2 + QK_K // 8 + QK_K // 16),
+    GGMLQuantizationType.IQ4_NL: (32, 2 + 16),
+    GGMLQuantizationType.IQ3_S: (256, 2 + QK_K // 4 + QK_K // 8 + QK_K // 32 + 4),
+    GGMLQuantizationType.IQ2_S: (256, 2 + QK_K // 4 + QK_K // 16),
+    GGMLQuantizationType.IQ4_XS: (256, 2 + 2 + QK_K // 2 + QK_K // 64),
+    GGMLQuantizationType.I8: (1, 1),
+    GGMLQuantizationType.I16: (1, 2),
+    GGMLQuantizationType.I32: (1, 4),
+    GGMLQuantizationType.I64: (1, 8),
+    GGMLQuantizationType.F64: (1, 8),
+    GGMLQuantizationType.IQ1_M: (256, QK_K // 8 + QK_K // 16 + QK_K // 32),
+    GGMLQuantizationType.BF16: (1, 2),
 }
+
 
 # copied from llama.cpp/gguf-py/gguf/quants.py to avoid dependence of gguf
 def quant_shape_to_byte_shape(shape: Sequence[int], quant_type: GGMLQuantizationType):
     block_size, type_size = GGML_QUANT_SIZES[quant_type]
     if shape[-1] % block_size != 0:
-        raise ValueError(f"Quantized tensor row size ({shape[-1]}) is not a multiple of {quant_type.name} block size ({block_size})")
+        raise ValueError(
+            f"Quantized tensor row size ({shape[-1]}) is not a multiple of {quant_type.name} block size ({block_size})"
+        )
     return (*shape[:-1], shape[-1] // block_size * type_size)
+
 
 GGML_TYPES = {
     "F32": 0,
@@ -157,23 +163,25 @@ DATA_TYPES = {
     "float64": 12,
 }
 
+
 class GGUFLoader:
     tensor_info: dict
     gguf_path: str
-    tensor_file_map: dict # {tensor_name: tensor_file_path}
+    tensor_file_map: dict  # {tensor_name: tensor_file_path}
     gguf_file_meta: dict
+
     def __init__(self, gguf_path: str):
         # Check dir exist
         if not os.path.exists(gguf_path):
             raise FileNotFoundError(f"GGUF dir not found: {gguf_path}")
-        
+
         self.tensor_info = {}
         self.gguf_path = gguf_path
         self.tensor_file_map = {}
         self.file_data_map = {}
         self.gguf_file_meta = {}
         self.tensor_device_map = {}
-        
+
         # Walk through all the .gguf files in the directory
         for root, dirs, files in os.walk(gguf_path):
             for file in files:
@@ -182,12 +190,12 @@ class GGUFLoader:
                     with open(file_name, "rb") as f:
                         self.load_gguf(f)
                         if file_name not in self.file_data_map:
-                            self.file_data_map[file_name] = np.memmap(file_name, mode = 'r')
-                            
+                            self.file_data_map[file_name] = np.memmap(file_name, mode="r")
+
     def load_gguf(self, f):
         f.seek(0)
-        assert f.read(4) == b'GGUF'
-        values = struct.unpack("<IQQ", f.read(4+8+8))
+        assert f.read(4) == b"GGUF"
+        values = struct.unpack("<IQQ", f.read(4 + 8 + 8))
         version, n_tensors, n_kv = values
         if version != 3:
             warnings.warn(f"Version {version} has never been tested, might not work")
@@ -211,7 +219,7 @@ class GGUFLoader:
             block_size, type_size = GGML_QUANT_SIZES[ggml_type]
             n_bytes = n_elems * type_size // block_size
             np_dims = tuple(reversed(shape))
-        
+
             item_type: npt.DTypeLike
             if ggml_type == GGMLQuantizationType.F16:
                 item_count = n_elems
@@ -245,7 +253,7 @@ class GGUFLoader:
                 "bad_offset": bad_offset,
                 "item_type": item_type,
                 "item_count": item_count,
-                "np_dims": np_dims
+                "np_dims": np_dims,
             }
 
         start = f.tell()
@@ -260,25 +268,25 @@ class GGUFLoader:
             offset = start + t["bad_offset"]
             offset += (alignment - offset % alignment) % alignment
             t["offset"] = offset
-            
+
         for name in tensor_info:
             self.tensor_file_map[name] = f.name
         self.tensor_info.update(tensor_info)
         self.gguf_file_meta.update(info)
-    
+
     def get_mmap_tensor(self, name):
         t = self.tensor_info[name]
-        mmap_data = self.file_data_map[ self.tensor_file_map[name] ]
+        mmap_data = self.file_data_map[self.tensor_file_map[name]]
 
         offset = t["offset"]
         item_type = t["item_type"]
         item_count = t["item_count"]
-        itemsize = int(np.empty([], dtype = item_type).itemsize)
+        itemsize = int(np.empty([], dtype=item_type).itemsize)
         return mmap_data[offset : offset + itemsize * item_count]
-    
-    def load_gguf_tensor(self, name: str, device:str = "cpu")->torch.Tensor:
+
+    def load_gguf_tensor(self, name: str, device: str = "cpu") -> torch.Tensor:
         t = self.tensor_info[name]
-        
+
         shape = t["shape"]
         ggml_type = t["ggml_type"]
 
@@ -291,24 +299,29 @@ class GGUFLoader:
 
         if "cuda" in device.lower():
             values = GGML_DEQUANTIZE_GPU[ggml_name](data, device)
-            #values = GGML_DEQUANTIZE[ggml_name](data)
-            #print("load_gguf_tensor")
-            #values = torch.from_numpy(values).to(device = device)
+            # values = GGML_DEQUANTIZE[ggml_name](data)
+            # print("load_gguf_tensor")
+            # values = torch.from_numpy(values).to(device = device)
         else:
             values = GGML_DEQUANTIZE[ggml_name](data)
             values = torch.from_numpy(values)
         values = values.view(shape[::-1])
-        if "attn_q" in name and self.gguf_file_meta['general.architecture'] in ["llama"]:
-            n_head = self.gguf_file_meta['llama.attention.head_count']
-            values = (values.reshape(n_head, values.shape[0] // n_head // 2, 2, *values.shape[1:])
-            .swapaxes(1, 2)
-            .reshape(values.shape))
-        elif "attn_k" in name and self.gguf_file_meta['general.architecture'] in ["llama"]:
-            n_head = self.gguf_file_meta['llama.attention.head_count_kv'] 
-            values = (values.reshape(n_head, values.shape[0] // n_head // 2, 2, *values.shape[1:])
-            .swapaxes(1, 2)
-            .reshape(values.shape))
+        if "attn_q" in name and self.gguf_file_meta["general.architecture"] in ["llama"]:
+            n_head = self.gguf_file_meta["llama.attention.head_count"]
+            values = (
+                values.reshape(n_head, values.shape[0] // n_head // 2, 2, *values.shape[1:])
+                .swapaxes(1, 2)
+                .reshape(values.shape)
+            )
+        elif "attn_k" in name and self.gguf_file_meta["general.architecture"] in ["llama"]:
+            n_head = self.gguf_file_meta["llama.attention.head_count_kv"]
+            values = (
+                values.reshape(n_head, values.shape[0] // n_head // 2, 2, *values.shape[1:])
+                .swapaxes(1, 2)
+                .reshape(values.shape)
+            )
         return values
+
 
 def read_value(f, data_type):
     if data_type == DATA_TYPES["string"]:
@@ -355,6 +368,7 @@ def read_value(f, data_type):
     else:
         raise NotImplementedError(f"Data type {data_type} not implemented")
 
+
 def dequantize_q2_k(data):
     # C implementation
     # https://github.com/ggerganov/ggml/blob/fca1caafea7de9fbd7efc733b9818f9cf2da3050/src/ggml-quants.c#L1547
@@ -371,35 +385,40 @@ def dequantize_q2_k(data):
     scales = data_u8[:, :16].reshape(num_blocks, 16, 1)
     qs = data_u8[:, 16:80].reshape(num_blocks, 64)
 
-    tmp = np.stack([
-        qs[:, 00:16] >> 0,
-        qs[:, 16:32] >> 0,
-        qs[:, 00:16] >> 2,
-        qs[:, 16:32] >> 2,
-        qs[:, 00:16] >> 4,
-        qs[:, 16:32] >> 4,
-        qs[:, 00:16] >> 6,
-        qs[:, 16:32] >> 6,
-        qs[:, 32:48] >> 0,
-        qs[:, 48:64] >> 0,
-        qs[:, 32:48] >> 2,
-        qs[:, 48:64] >> 2,
-        qs[:, 32:48] >> 4,
-        qs[:, 48:64] >> 4,
-        qs[:, 32:48] >> 6,
-        qs[:, 48:64] >> 6,
-    ], axis=1)
+    tmp = np.stack(
+        [
+            qs[:, 00:16] >> 0,
+            qs[:, 16:32] >> 0,
+            qs[:, 00:16] >> 2,
+            qs[:, 16:32] >> 2,
+            qs[:, 00:16] >> 4,
+            qs[:, 16:32] >> 4,
+            qs[:, 00:16] >> 6,
+            qs[:, 16:32] >> 6,
+            qs[:, 32:48] >> 0,
+            qs[:, 48:64] >> 0,
+            qs[:, 32:48] >> 2,
+            qs[:, 48:64] >> 2,
+            qs[:, 32:48] >> 4,
+            qs[:, 48:64] >> 4,
+            qs[:, 32:48] >> 6,
+            qs[:, 48:64] >> 6,
+        ],
+        axis=1,
+    )
 
     return d * (scales & 15) * (tmp & 3) - dmin * (scales >> 4)
 
-def dequantize_q2_k_gpu(data, device:str ="cuda"):
+
+def dequantize_q2_k_gpu(data, device: str = "cuda"):
     block_size = GGML_BLOCK_SIZES["Q2_K"]
     data = np.frombuffer(data, dtype=data.dtype)
     device = torch.device(device)
-    # TODO: this and from_numpy in other functions will cause a warning saying that numpy is not writable, 
+    # TODO: this and from_numpy in other functions will cause a warning saying that numpy is not writable,
     # the best way to fix this is transfer ptr to KTransformersOps instead of Tensor.
     data = torch.from_numpy(data)
     return KTransformersOps.dequantize_q2_k(data, block_size, device)
+
 
 def dequantize_q3_k(data):
     # C implementation
@@ -415,8 +434,8 @@ def dequantize_q3_k(data):
     d = data_f16[:, -1].reshape(num_blocks, 1, 1).astype(np.float32)
     bits = np.unpackbits(data_u8[:, :32].reshape(num_blocks, 32, 1), axis=-1, bitorder="little")
     bits = 4 ^ (bits << 2)
-    qs = data_u8[:, 32:32 + 64].astype(np.int16)
-    a, b, c = data_u8[:, 96: 96 + 12].reshape(num_blocks, 3, 4).transpose(1, 0, 2)
+    qs = data_u8[:, 32 : 32 + 64].astype(np.int16)
+    a, b, c = data_u8[:, 96 : 96 + 12].reshape(num_blocks, 3, 4).transpose(1, 0, 2)
     scales = np.zeros((num_blocks, 4, 4), dtype=np.uint8)
     scales[:, 0] = (a & 15) | ((c & 3) << 4)
     scales[:, 1] = (b & 15) | (((c >> 2) & 3) << 4)
@@ -424,33 +443,42 @@ def dequantize_q3_k(data):
     scales[:, 3] = (b >> 4) | ((c >> 6) << 4)
     scales = scales.reshape(num_blocks, 16, 1).astype(np.int16)
 
-    return d * (scales - 32) * np.stack([
-        (((qs[:, 00:16] >> 0) & 3) - bits[:, :16, 0]),
-        (((qs[:, 16:32] >> 0) & 3) - bits[:, 16:, 0]),
-        (((qs[:, 00:16] >> 2) & 3) - bits[:, :16, 1]),
-        (((qs[:, 16:32] >> 2) & 3) - bits[:, 16:, 1]),
-        (((qs[:, 00:16] >> 4) & 3) - bits[:, :16, 2]),
-        (((qs[:, 16:32] >> 4) & 3) - bits[:, 16:, 2]),
-        (((qs[:, 00:16] >> 6) & 3) - bits[:, :16, 3]),
-        (((qs[:, 16:32] >> 6) & 3) - bits[:, 16:, 3]),
-        (((qs[:, 32:48] >> 0) & 3) - bits[:, :16, 4]),
-        (((qs[:, 48:64] >> 0) & 3) - bits[:, 16:, 4]),
-        (((qs[:, 32:48] >> 2) & 3) - bits[:, :16, 5]),
-        (((qs[:, 48:64] >> 2) & 3) - bits[:, 16:, 5]),
-        (((qs[:, 32:48] >> 4) & 3) - bits[:, :16, 6]),
-        (((qs[:, 48:64] >> 4) & 3) - bits[:, 16:, 6]),
-        (((qs[:, 32:48] >> 6) & 3) - bits[:, :16, 7]),
-        (((qs[:, 48:64] >> 6) & 3) - bits[:, 16:, 7])
-    ], axis=1)
+    return (
+        d
+        * (scales - 32)
+        * np.stack(
+            [
+                (((qs[:, 00:16] >> 0) & 3) - bits[:, :16, 0]),
+                (((qs[:, 16:32] >> 0) & 3) - bits[:, 16:, 0]),
+                (((qs[:, 00:16] >> 2) & 3) - bits[:, :16, 1]),
+                (((qs[:, 16:32] >> 2) & 3) - bits[:, 16:, 1]),
+                (((qs[:, 00:16] >> 4) & 3) - bits[:, :16, 2]),
+                (((qs[:, 16:32] >> 4) & 3) - bits[:, 16:, 2]),
+                (((qs[:, 00:16] >> 6) & 3) - bits[:, :16, 3]),
+                (((qs[:, 16:32] >> 6) & 3) - bits[:, 16:, 3]),
+                (((qs[:, 32:48] >> 0) & 3) - bits[:, :16, 4]),
+                (((qs[:, 48:64] >> 0) & 3) - bits[:, 16:, 4]),
+                (((qs[:, 32:48] >> 2) & 3) - bits[:, :16, 5]),
+                (((qs[:, 48:64] >> 2) & 3) - bits[:, 16:, 5]),
+                (((qs[:, 32:48] >> 4) & 3) - bits[:, :16, 6]),
+                (((qs[:, 48:64] >> 4) & 3) - bits[:, 16:, 6]),
+                (((qs[:, 32:48] >> 6) & 3) - bits[:, :16, 7]),
+                (((qs[:, 48:64] >> 6) & 3) - bits[:, 16:, 7]),
+            ],
+            axis=1,
+        )
+    )
 
-def dequantize_q3_k_gpu(data, device:str ="cuda"):
+
+def dequantize_q3_k_gpu(data, device: str = "cuda"):
     block_size = GGML_BLOCK_SIZES["Q3_K"]
     data = np.frombuffer(data, dtype=data.dtype)
     device = torch.device(device)
-    # TODO: this and from_numpy in other functions will cause a warning saying that numpy is not writable, 
+    # TODO: this and from_numpy in other functions will cause a warning saying that numpy is not writable,
     # the best way to fix this is transfer ptr to KTransformersOps instead of Tensor.
     data = torch.from_numpy(data)
     return KTransformersOps.dequantize_q3_k(data, block_size, device)
+
 
 def dequantize_q4_k(data):
     # C implementation
@@ -467,20 +495,26 @@ def dequantize_q4_k(data):
     qs1 = data_u8[:, 4:16].reshape(num_blocks, 12, 1)
     qs2 = data_u8[:, 16:].reshape(num_blocks, 4, 32)
     # Dequantize scales and offsets (6 bits and 4 + 2 bits)
-    factors = scale_factors * np.concatenate([qs1[:, 0:4] & 0b111111, (qs1[:, 8:] & 15) | ((qs1[:, 0:4] >> 6) << 4)], axis=1)
-    offsets = scale_offsets * np.concatenate([qs1[:, 4:8] & 0b111111, (qs1[:, 8:] >> 4) | ((qs1[:, 4:8] >> 6) << 4)], axis=1)
+    factors = scale_factors * np.concatenate(
+        [qs1[:, 0:4] & 0b111111, (qs1[:, 8:] & 15) | ((qs1[:, 0:4] >> 6) << 4)], axis=1
+    )
+    offsets = scale_offsets * np.concatenate(
+        [qs1[:, 4:8] & 0b111111, (qs1[:, 8:] >> 4) | ((qs1[:, 4:8] >> 6) << 4)], axis=1
+    )
     # Interleave low and high quantized bits
-    qs2 = np.stack([qs2 & 0xf, qs2 >> 4], axis=2).reshape(num_blocks, 8, 32)
+    qs2 = np.stack([qs2 & 0xF, qs2 >> 4], axis=2).reshape(num_blocks, 8, 32)
     # Dequantize final weights using scales and offsets
     return factors * qs2 - offsets
 
-def dequantize_q4_k_gpu(data, device:str ="cuda"):
+
+def dequantize_q4_k_gpu(data, device: str = "cuda"):
     data = np.frombuffer(data, dtype=data.dtype)
     device = torch.device(device)
-    # TODO: this and from_numpy in other functions will cause a warning saying that numpy is not writable, 
+    # TODO: this and from_numpy in other functions will cause a warning saying that numpy is not writable,
     # the best way to fix this is transfer ptr to KTransformersOps instead of Tensor.
     data = torch.from_numpy(data)
     return KTransformersOps.dequantize_q4_k(data, 144, device)
+
 
 def dequantize_q5_k(data):
     # C implementation
@@ -496,8 +530,8 @@ def dequantize_q5_k(data):
     d = data_f16[:, 0].reshape(num_blocks, 1).astype(np.float32)
     dmin = data_f16[:, 1].reshape(num_blocks, 1).astype(np.float32)
     scales = data_u8[:, 4:16].reshape(num_blocks, 12, 1)
-    qh = data_u8[:, 16: 16 + 32].reshape(num_blocks, 32, 1)
-    qs = data_u8[:, 48: 48 + 128].reshape(num_blocks, 4, 32)
+    qh = data_u8[:, 16 : 16 + 32].reshape(num_blocks, 32, 1)
+    qs = data_u8[:, 48 : 48 + 128].reshape(num_blocks, 4, 32)
 
     bits = np.unpackbits(qh, axis=-1, bitorder="little")
 
@@ -527,25 +561,30 @@ def dequantize_q5_k(data):
     d7 = d * (scales_lo_4[:, 2] | (scales_hi_6[:, 2] << 4))
     d8 = d * (scales_lo_4[:, 3] | (scales_hi_6[:, 3] << 4))
 
-    return np.concatenate([
-        d1 * (qs_lo_4[:, 0] + (bits[:, :, 0] << 4)) - m1,
-        d2 * (qs_hi_4[:, 0] + (bits[:, :, 1] << 4)) - m2,
-        d3 * (qs_lo_4[:, 1] + (bits[:, :, 2] << 4)) - m3,
-        d4 * (qs_hi_4[:, 1] + (bits[:, :, 3] << 4)) - m4,
-        d5 * (qs_lo_4[:, 2] + (bits[:, :, 4] << 4)) - m5,
-        d6 * (qs_hi_4[:, 2] + (bits[:, :, 5] << 4)) - m6,
-        d7 * (qs_lo_4[:, 3] + (bits[:, :, 6] << 4)) - m7,
-        d8 * (qs_hi_4[:, 3] + (bits[:, :, 7] << 4)) - m8,
-    ], axis=1)
+    return np.concatenate(
+        [
+            d1 * (qs_lo_4[:, 0] + (bits[:, :, 0] << 4)) - m1,
+            d2 * (qs_hi_4[:, 0] + (bits[:, :, 1] << 4)) - m2,
+            d3 * (qs_lo_4[:, 1] + (bits[:, :, 2] << 4)) - m3,
+            d4 * (qs_hi_4[:, 1] + (bits[:, :, 3] << 4)) - m4,
+            d5 * (qs_lo_4[:, 2] + (bits[:, :, 4] << 4)) - m5,
+            d6 * (qs_hi_4[:, 2] + (bits[:, :, 5] << 4)) - m6,
+            d7 * (qs_lo_4[:, 3] + (bits[:, :, 6] << 4)) - m7,
+            d8 * (qs_hi_4[:, 3] + (bits[:, :, 7] << 4)) - m8,
+        ],
+        axis=1,
+    )
 
-def dequantize_q5_k_gpu(data, device:str ="cuda"):
+
+def dequantize_q5_k_gpu(data, device: str = "cuda"):
     block_size = GGML_BLOCK_SIZES["Q5_K"]
     data = np.frombuffer(data, dtype=data.dtype)
     device = torch.device(device)
-    # TODO: this and from_numpy in other functions will cause a warning saying that numpy is not writable, 
+    # TODO: this and from_numpy in other functions will cause a warning saying that numpy is not writable,
     # the best way to fix this is transfer ptr to KTransformersOps instead of Tensor.
     data = torch.from_numpy(data)
     return KTransformersOps.dequantize_q5_k(data, block_size, device)
+
 
 def dequantize_q6_k(data):
     # C implementation
@@ -566,37 +605,41 @@ def dequantize_q6_k(data):
     sc = data_i8[:, 192:208, np.newaxis].astype(np.float32)
 
     # Unpack bits, subtraction requires signed data type
-    q1 = (ql[:,   :32 ] & 0xF) | (((qh[:, :32] >> 0) & 3) << 4) - 32
-    q2 = (ql[:, 32:64 ] & 0xF) | (((qh[:, :32] >> 2) & 3) << 4) - 32
-    q3 = (ql[:,   :32 ] >>  4) | (((qh[:, :32] >> 4) & 3) << 4) - 32
-    q4 = (ql[:, 32:64 ] >>  4) | (((qh[:, :32] >> 6) & 3) << 4) - 32
-    q5 = (ql[:, 64:96 ] & 0xF) | (((qh[:, 32:] >> 0) & 3) << 4) - 32
+    q1 = (ql[:, :32] & 0xF) | (((qh[:, :32] >> 0) & 3) << 4) - 32
+    q2 = (ql[:, 32:64] & 0xF) | (((qh[:, :32] >> 2) & 3) << 4) - 32
+    q3 = (ql[:, :32] >> 4) | (((qh[:, :32] >> 4) & 3) << 4) - 32
+    q4 = (ql[:, 32:64] >> 4) | (((qh[:, :32] >> 6) & 3) << 4) - 32
+    q5 = (ql[:, 64:96] & 0xF) | (((qh[:, 32:] >> 0) & 3) << 4) - 32
     q6 = (ql[:, 96:128] & 0xF) | (((qh[:, 32:] >> 2) & 3) << 4) - 32
-    q7 = (ql[:, 64:96 ] >>  4) | (((qh[:, 32:] >> 4) & 3) << 4) - 32
-    q8 = (ql[:, 96:128] >>  4) | (((qh[:, 32:] >> 6) & 3) << 4) - 32
+    q7 = (ql[:, 64:96] >> 4) | (((qh[:, 32:] >> 4) & 3) << 4) - 32
+    q8 = (ql[:, 96:128] >> 4) | (((qh[:, 32:] >> 6) & 3) << 4) - 32
 
     # Dequantize
-    return scales * np.concatenate([
-        sc[:,  0] * q1[:, :16],
-        sc[:,  1] * q1[:, 16:],
-        sc[:,  2] * q2[:, :16],
-        sc[:,  3] * q2[:, 16:],
-        sc[:,  4] * q3[:, :16],
-        sc[:,  5] * q3[:, 16:],
-        sc[:,  6] * q4[:, :16],
-        sc[:,  7] * q4[:, 16:],
-        sc[:,  8] * q5[:, :16],
-        sc[:,  9] * q5[:, 16:],
-        sc[:, 10] * q6[:, :16],
-        sc[:, 11] * q6[:, 16:],
-        sc[:, 12] * q7[:, :16],
-        sc[:, 13] * q7[:, 16:],
-        sc[:, 14] * q8[:, :16],
-        sc[:, 15] * q8[:, 16:],
-    ], axis=1) 
+    return scales * np.concatenate(
+        [
+            sc[:, 0] * q1[:, :16],
+            sc[:, 1] * q1[:, 16:],
+            sc[:, 2] * q2[:, :16],
+            sc[:, 3] * q2[:, 16:],
+            sc[:, 4] * q3[:, :16],
+            sc[:, 5] * q3[:, 16:],
+            sc[:, 6] * q4[:, :16],
+            sc[:, 7] * q4[:, 16:],
+            sc[:, 8] * q5[:, :16],
+            sc[:, 9] * q5[:, 16:],
+            sc[:, 10] * q6[:, :16],
+            sc[:, 11] * q6[:, 16:],
+            sc[:, 12] * q7[:, :16],
+            sc[:, 13] * q7[:, 16:],
+            sc[:, 14] * q8[:, :16],
+            sc[:, 15] * q8[:, 16:],
+        ],
+        axis=1,
+    )
+
 
 # @torch.jit.script
-def dequantize_q6_k_gpu(data: np.ndarray, device:str = "cuda"):
+def dequantize_q6_k_gpu(data: np.ndarray, device: str = "cuda"):
     block_size = GGML_BLOCK_SIZES["Q6_K"]
     device = torch.device(device)
     num_blocks = len(data) // block_size
@@ -604,7 +647,9 @@ def dequantize_q6_k_gpu(data: np.ndarray, device:str = "cuda"):
     data = torch.from_numpy(data)
     return KTransformersOps.dequantize_q6_k(data, block_size, device)
 
+
 kvalues_iq4nl = np.array([-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113], dtype=np.int8)
+
 
 def dequantize_iq4_xs(data):
     # C implementation
@@ -614,35 +659,37 @@ def dequantize_iq4_xs(data):
     block_size = GGML_BLOCK_SIZES["IQ4_XS"]
     num_blocks = len(data) // block_size
 
-    d = np.frombuffer(data, dtype=np.float16)[0::block_size//2].astype(np.float32).reshape(num_blocks, 1)
-    scales_h = np.frombuffer(data, dtype=np.uint16)[1::block_size//2].reshape(num_blocks, 1)
+    d = np.frombuffer(data, dtype=np.float16)[0 :: block_size // 2].astype(np.float32).reshape(num_blocks, 1)
+    scales_h = np.frombuffer(data, dtype=np.uint16)[1 :: block_size // 2].reshape(num_blocks, 1)
     data_u8 = np.frombuffer(data, dtype=np.uint8).reshape(num_blocks, block_size)[:, 4:]
     scales_l = data_u8[:, :4].reshape(num_blocks, 4)
     qs = data_u8[:, 4:].reshape(num_blocks, block_size - 8)
 
     ls = np.zeros((num_blocks, QK_K // 32), dtype=np.int8)
     for ib in range(QK_K // 32):
-        ls[:, ib] = ((scales_l[:, ib // 2] >> 4 * (ib % 2)) & 0xf) | (((scales_h[:, 0] >> 2 * ib) & 3) << 4)
+        ls[:, ib] = ((scales_l[:, ib // 2] >> 4 * (ib % 2)) & 0xF) | (((scales_h[:, 0] >> 2 * ib) & 3) << 4)
 
     dl = (d * (ls - 32)).reshape(num_blocks, -1, 1)
 
-    qs_lo_4 = qs[:, :QK_K // 2].reshape(num_blocks, -1, 16) & 0xf
-    qs_hi_4 = qs[:, :QK_K // 2].reshape(num_blocks, -1, 16) >> 4
+    qs_lo_4 = qs[:, : QK_K // 2].reshape(num_blocks, -1, 16) & 0xF
+    qs_hi_4 = qs[:, : QK_K // 2].reshape(num_blocks, -1, 16) >> 4
 
     y = np.zeros((num_blocks, QK_K), dtype=np.float32)
     for ib in range(QK_K // 32):
-        y[:, ib*32:(ib*32)+16] = dl[:, ib] * kvalues_iq4nl[qs_lo_4[:, ib]]
-        y[:, (ib*32)+16:(ib*32)+32] = dl[:, ib] * kvalues_iq4nl[qs_hi_4[:, ib]]
+        y[:, ib * 32 : (ib * 32) + 16] = dl[:, ib] * kvalues_iq4nl[qs_lo_4[:, ib]]
+        y[:, (ib * 32) + 16 : (ib * 32) + 32] = dl[:, ib] * kvalues_iq4nl[qs_hi_4[:, ib]]
 
     return y.flatten()
 
-def dequantize_iq4_xs_gpu(data: np.ndarray, device:str = "cuda"):
+
+def dequantize_iq4_xs_gpu(data: np.ndarray, device: str = "cuda"):
     block_size = GGML_BLOCK_SIZES["IQ4_XS"]
     device = torch.device(device)
     num_blocks = len(data) // block_size
     data = np.frombuffer(data, dtype=data.dtype)
     data = torch.from_numpy(data)
     return KTransformersOps.dequantize_iq4_xs(data, block_size, device)
+
 
 def dequantize_q4_0(data):
     # C implementation
@@ -654,13 +701,18 @@ def dequantize_q4_0(data):
     scales = np.frombuffer(data, dtype=np.float16).reshape(num_blocks, 1 + 8)[:, :1].astype(np.float32)
     qs = np.frombuffer(data, dtype=np.uint8).reshape(num_blocks, 2 + 16)[:, 2:]
 
-    return np.concatenate([
-        scales * ((qs & 0xf).astype(np.int8) - 8),
-        scales * ((qs >> 4).astype(np.int8) - 8),
-    ], axis=1)
+    return np.concatenate(
+        [
+            scales * ((qs & 0xF).astype(np.int8) - 8),
+            scales * ((qs >> 4).astype(np.int8) - 8),
+        ],
+        axis=1,
+    )
+
 
 def dequantize_q4_0_gpu(data):
     raise NotImplementedError()
+
 
 def dequantize_q5_0(data):
     # C implementation
@@ -670,21 +722,26 @@ def dequantize_q5_0(data):
     num_blocks = len(data) // GGML_BLOCK_SIZES["Q5_0"]
 
     scales = np.frombuffer(data, dtype=np.float16).reshape(num_blocks, 1 + 2 + 8)[:, :1].astype(np.float32)
-    qh = np.frombuffer(data, dtype=np.uint8).reshape(num_blocks, 2 + 4 + 16)[:, 2:2 + 4]
-    qs = np.frombuffer(data, dtype=np.uint8).reshape(num_blocks, 2 + 4 + 16)[:, 2 + 4:]
+    qh = np.frombuffer(data, dtype=np.uint8).reshape(num_blocks, 2 + 4 + 16)[:, 2 : 2 + 4]
+    qs = np.frombuffer(data, dtype=np.uint8).reshape(num_blocks, 2 + 4 + 16)[:, 2 + 4 :]
 
     bits = np.unpackbits(qh, axis=-1, bitorder="little")
 
-    x0 = ((qs & 0xf).astype(np.int8) | (bits[:, :16] << 4)) - 16
+    x0 = ((qs & 0xF).astype(np.int8) | (bits[:, :16] << 4)) - 16
     x1 = ((qs >> 4).astype(np.int8) | (bits[:, 16:] << 4)) - 16
 
-    return np.concatenate([
-        scales * x0,
-        scales * x1,
-    ], axis=1)
+    return np.concatenate(
+        [
+            scales * x0,
+            scales * x1,
+        ],
+        axis=1,
+    )
+
 
 def dequantize_q5_0_gpu(data):
     raise NotImplementedError()
+
 
 def dequantize_q8_0(data):
     # C struct definition
@@ -695,7 +752,8 @@ def dequantize_q8_0(data):
     qs = np.frombuffer(data, dtype=np.int8).reshape(num_blocks, 2 + 32)[:, 2:]
     return scales * qs
 
-def dequantize_q8_0_gpu(data, device:str = "cuda"):
+
+def dequantize_q8_0_gpu(data, device: str = "cuda"):
     # C struct definition
     # https://github.com/ggerganov/ggml/blob/fca1caafea7de9fbd7efc733b9818f9cf2da3050/src/ggml-quants.h#L43
     num_blocks = len(data) // GGML_BLOCK_SIZES["Q8_0"]
@@ -708,6 +766,7 @@ def dequantize_q8_0_gpu(data, device:str = "cuda"):
 def dequantize_f32(data):
     return np.frombuffer(data, dtype=np.float32)
 
+
 def dequantize_f32_gpu(data, device):
     data = np.frombuffer(data, dtype=np.float32)
     res = torch.from_numpy(data)
@@ -715,8 +774,10 @@ def dequantize_f32_gpu(data, device):
     res_gpu.copy_(res)
     return res_gpu
 
+
 def dequantize_f16(data):
     return np.frombuffer(data, dtype=np.float16)
+
 
 def dequantize_f16_gpu(data, device):
     data = np.frombuffer(data, dtype=np.float16)
@@ -724,6 +785,7 @@ def dequantize_f16_gpu(data, device):
     res_gpu = torch.empty_like(res, device=device)
     res_gpu.copy_(res)
     return res_gpu
+
 
 GGML_DEQUANTIZE = {
     "F32": dequantize_f32,
@@ -755,12 +817,8 @@ GGML_DEQUANTIZE_GPU = {
 
 
 def translate_name_to_gguf_mixtral(name):
-    
-    replacement_template = {
-        "w1.weight": "ffn_gate",
-        "w2.weight": "ffn_down",
-        "w3.weight": "ffn_up"
-    }  
+
+    replacement_template = {"w1.weight": "ffn_gate", "w2.weight": "ffn_down", "w3.weight": "ffn_up"}
 
     pattern = re.compile(r"model.layers\.(\d+)\.block_sparse_moe\.experts\.(\d+)\.(w\d\.weight)")
 
@@ -774,8 +832,9 @@ def translate_name_to_gguf_mixtral(name):
             return match.group(0)
 
     new_name = re.sub(pattern, replace_match, name)
-    
+
     return new_name
+
 
 def translate_name_to_gguf(name):
 
@@ -784,7 +843,7 @@ def translate_name_to_gguf(name):
     name = name.replace("lm_head.", "output.")
     name = name.replace("model.embed_tokens.", "token_embd.")
     name = name.replace("model.norm.", "output_norm.")
-    
+
     name = name.replace("model.layers.", "blk.")
     name = name.replace(".input_layernorm", ".attn_norm")
     name = name.replace(".mlp.down_proj", ".ffn_down")
@@ -802,11 +861,11 @@ def translate_name_to_gguf(name):
     name = name.replace(".self_attn.q_a_proj", ".attn_q_a")
     name = name.replace(".self_attn.q_a_layernorm", ".attn_q_a_norm")
     name = name.replace(".self_attn.q_b_proj", ".attn_q_b")
-    
+
     name = name.replace(".shared_expert.", ".shared_experts.")
     name = name.replace(".shared_expert_", ".shared_experts_")
     name = name.replace(".gate_up_proj.", ".up_proj")
-    
+
     name = name.replace(".mlp.shared_experts.down_proj", ".ffn_down_shexp")
     name = name.replace(".mlp.gate", ".ffn_gate_inp")
     name = name.replace(".mlp.shared_experts.gate_proj", ".ffn_gate_shexp")
@@ -817,14 +876,13 @@ def translate_name_to_gguf(name):
     name = name.replace(".mlp.experts.ffn_gate_exps", ".ffn_gate_exps")
     name = name.replace(".mlp.experts.ffn_up_exps", ".ffn_up_exps")
 
-    
     name = name.replace(".block_sparse_moe.gate.", ".ffn_gate_inp.")
     name = name.replace(".block_sparse_moe.experts", "")
-    
+
     return name
 
-if __name__ == '__main__':
-    gguf_path = '/mnt/data/model/DeepSeek-Coder-V2-GGUF-WJH'
-    loader = GGUFLoader(gguf_path)
-    loader.load_gguf_tensor('token_embd.weight')
 
+if __name__ == "__main__":
+    gguf_path = "/mnt/data/model/DeepSeek-Coder-V2-GGUF-WJH"
+    loader = GGUFLoader(gguf_path)
+    loader.load_gguf_tensor("token_embd.weight")

@@ -541,11 +541,11 @@ class MOEBindings {
         static void inner(void *args) {
             Args *args_ = (Args *)args;
             args_->cpuinfer->enqueue(
-                &MOE::forward, args_->moe, args_->qlen, args_->k,
-                args_->expert_ids, args_->size_per_token, args_->weights, args_->input, args_->output);
+                &MOE::forward, args_->moe, args_->qlen, args_->k, args_->size_per_token,
+                args_->expert_ids,  args_->weights, args_->input, args_->output);
         }
         static std::pair<intptr_t, intptr_t>
-        cpuinfer_interface(MOE &moe, int qlen, int k, intptr_t expert_ids, intptr_t size_per_token,
+        cpuinfer_interface(MOE &moe, int qlen, int k, intptr_t size_per_token, intptr_t expert_ids, 
                            intptr_t weights, intptr_t input, intptr_t output) {
             Args *args = new Args{nullptr,
                                   &moe,

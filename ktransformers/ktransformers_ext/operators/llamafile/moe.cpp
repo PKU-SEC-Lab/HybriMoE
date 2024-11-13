@@ -423,7 +423,7 @@ void MOE::forward_many(int qlen, int k, const uint64_t* expert_ids, const uint64
     }, nullptr);
 }
 
-void MOE::forward(int qlen, int k, const uint64_t* expert_ids, const uint64_t* size_per_token, const float* weights, const void* input, void* output, Backend* backend) {
+void MOE::forward(int qlen, int k, const uint64_t* size_per_token, const uint64_t* expert_ids, const float* weights, const void* input, void* output, Backend* backend) {
     if (qlen < config_.group_min_len) {
         for (int i = 0; i < qlen; i++) {
             int s = size_per_token[i];
@@ -433,5 +433,5 @@ void MOE::forward(int qlen, int k, const uint64_t* expert_ids, const uint64_t* s
     }
     int forward_len = std::min(config_.group_max_len, qlen);
     forward_many(forward_len, k, expert_ids, size_per_token, weights, input, output, backend);
-    forward(qlen - forward_len, k, expert_ids + forward_len * k, size_per_token + forward_len, weights + forward_len * k, (uint8_t*)input + forward_len * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), (uint8_t*)output + forward_len * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), backend);
+    forward(qlen - forward_len, k, size_per_token + forward_len, expert_ids + forward_len * k, weights + forward_len * k, (uint8_t*)input + forward_len * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), (uint8_t*)output + forward_len * config_.hidden_size * ggml_type_size(config_.hidden_type) / ggml_blck_size(config_.hidden_type), backend);
 }

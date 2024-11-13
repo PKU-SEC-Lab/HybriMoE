@@ -82,7 +82,6 @@ def load_cur_state_dict(module: nn.Module, gguf_loader: GGUFLoader, prefix: str 
 
 
 def load_weights(module: nn.Module, gguf_loader: GGUFLoader, prefix=""):
-    # print(f"recursively loading weights {prefix},{return_when_injected=}, {only_load_injected=}")
     if not isinstance(module, base_operator.BaseInjectedModule):
         load_cur_state_dict(module, gguf_loader, prefix)
         for name, child in module._modules.items():
@@ -105,7 +104,9 @@ def prefill_and_generate(model, tokenizer, inputs, max_new_tokens=10000, use_cud
 
     tokens = []
 
-    def decode_one_tokens(cuda_graph_runner, cur_token, position_ids, cache_position, past_key_values, use_cuda_graph: bool = True):
+    def decode_one_tokens(
+        cuda_graph_runner, cur_token, position_ids, cache_position, past_key_values, use_cuda_graph: bool = True
+    ):
         if use_cuda_graph:
             logits = cuda_graph_runner(cur_token, position_ids, cache_position)
         else:
@@ -113,7 +114,14 @@ def prefill_and_generate(model, tokenizer, inputs, max_new_tokens=10000, use_cud
             torch.cuda.set_device(torch_device)
             inputs_embeds = model.model.embed_tokens(cur_token.to("cpu")).to(torch_device)
             # with torch.cuda.stream(custom_stream):
-            logits = model(inputs_embeds=inputs_embeds, position_ids=position_ids, cache_position=cache_position, past_key_values=past_key_values, return_dict=False, use_cache=True)[0]
+            logits = model(
+                inputs_embeds=inputs_embeds,
+                position_ids=position_ids,
+                cache_position=cache_position,
+                past_key_values=past_key_values,
+                return_dict=False,
+                use_cache=True,
+            )[0]
         if past_key_values != None:
             past_key_values.change_seq_length(1)
         for device in all_cuda_device:
@@ -131,7 +139,13 @@ def prefill_and_generate(model, tokenizer, inputs, max_new_tokens=10000, use_cud
     with torch.no_grad():
         stream = TextStreamer(tokenizer)
         if mode != "long_context":
-            past_key_values = StaticCache(config=model.config, max_batch_size=1, max_cache_len=seq_length + max_new_tokens, device=device_map, dtype=model.dtype)
+            past_key_values = StaticCache(
+                config=model.config,
+                max_batch_size=1,
+                max_cache_len=seq_length + max_new_tokens,
+                device=device_map,
+                dtype=model.dtype,
+            )
         else:
             past_key_values = None
         cache_position = torch.arange(seq_length, device=torch_device)
@@ -147,10 +161,24 @@ def prefill_and_generate(model, tokenizer, inputs, max_new_tokens=10000, use_cud
         else:
             inputs_embeds = model.model.embed_tokens(inputs.to("cpu")).to(torch_device)
         logits = (
-            model(inputs_embeds=inputs_embeds, cache_position=cache_position, past_key_values=past_key_values, return_dict=False, use_cache=True)[0][:, -1, :].unsqueeze(0).clone().to(torch_device)
+            model(
+                inputs_embeds=inputs_embeds,
+                cache_position=cache_position,
+                past_key_values=past_key_values,
+                return_dict=False,
+                use_cache=True,
+            )[0][:, -1, :]
+            .unsqueeze(0)
+            .clone()
+            .to(torch_device)
         )
         generation_config, model_kwargs = model._prepare_generation_config(
-            None, max_length=max_new_tokens, do_sample=True, top_k=5, top_p=0.85, temperature=0.1  # change this to modify generate config
+            None,
+            max_length=max_new_tokens,
+            do_sample=True,
+            top_k=5,
+            top_p=0.85,
+            temperature=0.1,  # change this to modify generate config
         )
         try:  # transformers==4.43
             logits_warper = model._get_logits_warper(generation_config, device=inputs.device)
@@ -176,13 +204,29 @@ def prefill_and_generate(model, tokenizer, inputs, max_new_tokens=10000, use_cud
 
         if use_cuda_graph:
             cuda_graph_runner = CUDAGraphRunner()
-            cuda_graph_runner.capture(model, next_token.unsqueeze(0), position_ids, cache_position, past_key_values, torch_device, return_dict=False, use_cache=True)
+            cuda_graph_runner.capture(
+                model,
+                next_token.unsqueeze(0),
+                position_ids,
+                cache_position,
+                past_key_values,
+                torch_device,
+                return_dict=False,
+                use_cache=True,
+            )
         else:
             cuda_graph_runner = None
 
         start_time = time.time()
         for _ in range(1, max_new_tokens):
-            next_token = decode_one_tokens(cuda_graph_runner, next_token.unsqueeze(0), position_ids, cache_position, past_key_values, use_cuda_graph).to(torch_device)
+            next_token = decode_one_tokens(
+                cuda_graph_runner,
+                next_token.unsqueeze(0),
+                position_ids,
+                cache_position,
+                past_key_values,
+                use_cuda_graph,
+            ).to(torch_device)
             inputs = torch.cat((inputs, next_token.unsqueeze(0)), dim=-1)
             generated_ids[:, cache_position] = next_token.int()
             tokens.append(int(next_token))

@@ -52,8 +52,8 @@ class MOE {
     ~MOE();
     void warm_up(Backend* backend);
     void forward_one(int k, const uint64_t* expert_ids, const float* weights, const void* input, void* output, Backend* backend);
-    void forward_many(int qlen, int k, const uint64_t* expert_ids,const uint64_t* size_per_token, const float* weights, const void* input, void* output, Backend* backend);
-    void forward(int qlen, int k, const uint64_t* expert_ids, const uint64_t* size_per_token,const float* weights, const void* input, void* output, Backend* backend);
+    void forward_many(int qlen, int k, const uint64_t* size_per_token,const uint64_t* expert_ids, const float* weights, const void* input, void* output, Backend* backend);
+    void forward(int qlen, int k, const uint64_t* size_per_token, const uint64_t* expert_ids, const float* weights, const void* input, void* output, Backend* backend);
 
    private:
     MOEConfig config_;

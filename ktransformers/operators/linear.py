@@ -63,7 +63,10 @@ class KLinearBase(ABC):
         else:
             shape = self.gguf_loader.tensor_info[key + ".weight"]["shape"]
             if len(shape) == 1:
-                print("Warning: orig_module is not set, but has in_features or out_features equals to 1, can't get in_features and out_features from GGUF")
+                print(
+                    "Warning: orig_module is not set, but has in_features or out_features equals to 1, can't get"
+                    " in_features and out_features from GGUF"
+                )
             self.in_features = self.gguf_loader.tensor_info[key + ".weight"]["shape"][0]
             self.out_features = self.gguf_loader.tensor_info[key + ".weight"]["shape"][1]
 
@@ -215,7 +218,9 @@ class KLinearMarlin(KLinearBase):
         if self.has_bias:
             self.bias = self.bias.to(device)
         # Pack Marlin linear
-        w_ref, marlin_q_w, marlin_s, g_idx, sort_indices, _ = marlin_quantize(weight, self.num_bits, self.group_size, self.act_order)
+        w_ref, marlin_q_w, marlin_s, g_idx, sort_indices, _ = marlin_quantize(
+            weight, self.num_bits, self.group_size, self.act_order
+        )
         self.workspace = MarlinWorkspace(
             self.out_features,
             GPTQ_MARLIN_MIN_THREAD_N,
@@ -420,24 +425,40 @@ class KTransformersLinear(BaseInjectedModule, KLinearBase):
         # build all the linear operators
         if prefill_op is not None:
             assert prefill_op in LINEAR_MAP, f"linear_type {prefill_op} not supported"
-            if prefill_op == "KLinearMarlin" and (orig_module.in_features % GPTQ_MARLIN_MIN_THREAD_N != 0 or orig_module.out_features % GPTQ_MARLIN_MIN_THREAD_N != 0):
-                print(f"This linear module's in_features or out_features is not divisible by GPTQ_MARLIN_MIN_THREAD_N({GPTQ_MARLIN_MIN_THREAD_N}), using KLinearTorch instead.")
+            if prefill_op == "KLinearMarlin" and (
+                orig_module.in_features % GPTQ_MARLIN_MIN_THREAD_N != 0
+                or orig_module.out_features % GPTQ_MARLIN_MIN_THREAD_N != 0
+            ):
+                print(
+                    "This linear module's in_features or out_features is not divisible by"
+                    f" GPTQ_MARLIN_MIN_THREAD_N({GPTQ_MARLIN_MIN_THREAD_N}), using KLinearTorch instead."
+                )
                 print(f"module info: key:{key} orig_module:{orig_module}")
                 self.prefill_linear = KLinearTorch(key, gguf_loader, config, orig_module, prefill_device, **kwargs)
             else:
-                self.prefill_linear = LINEAR_MAP[prefill_op](key, gguf_loader, config, orig_module, prefill_device, **kwargs)
+                self.prefill_linear = LINEAR_MAP[prefill_op](
+                    key, gguf_loader, config, orig_module, prefill_device, **kwargs
+                )
         else:
             self.prefill_linear = None
 
         if generate_op is not None:
             assert generate_op in LINEAR_MAP, f"linear_type {generate_op} not supported"
-            if generate_op == "KLinearMarlin" and (orig_module.in_features % GPTQ_MARLIN_MIN_THREAD_N != 0 or orig_module.out_features % GPTQ_MARLIN_MIN_THREAD_N != 0):
-                print(f"This linear module's in_features or out_features is not divisible by GPTQ_MARLIN_MIN_THREAD_N({GPTQ_MARLIN_MIN_THREAD_N}), using KLinearTorch instead.")
+            if generate_op == "KLinearMarlin" and (
+                orig_module.in_features % GPTQ_MARLIN_MIN_THREAD_N != 0
+                or orig_module.out_features % GPTQ_MARLIN_MIN_THREAD_N != 0
+            ):
+                print(
+                    "This linear module's in_features or out_features is not divisible by"
+                    f" GPTQ_MARLIN_MIN_THREAD_N({GPTQ_MARLIN_MIN_THREAD_N}), using KLinearTorch instead."
+                )
                 print(f"module info: key:{key} orig_module:{orig_module}")
                 self.generate_op = "KLinearTorch"
                 self.generate_linear = KLinearTorch(key, gguf_loader, config, orig_module, generate_device, **kwargs)
             else:
-                self.generate_linear = LINEAR_MAP[generate_op](key, gguf_loader, config, orig_module, generate_device, **kwargs)
+                self.generate_linear = LINEAR_MAP[generate_op](
+                    key, gguf_loader, config, orig_module, generate_device, **kwargs
+                )
         else:
             self.generate_linear = None
         self.mode = InferenceState.UNLOAD
@@ -471,7 +492,9 @@ class KTransformersLinear(BaseInjectedModule, KLinearBase):
             self.generate_linear.unload()
             self.device = "cpu"
         else:
-            raise ValueError("mode must be either InferenceState.GENERATE, InferenceState.PREFILL or InferenceState.UNLOAD")
+            raise ValueError(
+                "mode must be either InferenceState.GENERATE, InferenceState.PREFILL or InferenceState.UNLOAD"
+            )
         self.mode = mode
 
     def unload(self):
@@ -491,4 +514,6 @@ class KTransformersLinear(BaseInjectedModule, KLinearBase):
         elif mode == InferenceState.UNLOAD:
             self.unload()
         else:
-            raise ValueError("mode must be either InferenceState.GENERATE, InferenceState.PREFILL or InferenceState.UNLOAD")
+            raise ValueError(
+                "mode must be either InferenceState.GENERATE, InferenceState.PREFILL or InferenceState.UNLOAD"
+            )

@@ -78,7 +78,7 @@ def local_chat(
 ):
     # switch model to set path
 
-    model_name = 1
+    model_name = 0
     if model_name == 0:
         model_path = "/opt/pretrained_models/DeepSeek-V2-Lite-Chat"
         gguf_path = "/home/syf/ktransformers/Deepseek-GGUF"
@@ -124,7 +124,7 @@ def local_chat(
 
     # setting
     if model_name == 1:
-        load_size = [4] * config.num_hidden_layers
+        load_size = [2] * config.num_hidden_layers
     else:
         load_size = [16] * config.num_hidden_layers
     prefetch_size = 0
@@ -156,9 +156,9 @@ def local_chat(
     # content = "write quick sort algorithm in python"
     cache = KExpertsCache._instance
     loop = 1
-
-    # content = "请完整的给出每种排序的c语言代码"
-    content = """
+    content = "你好，请从1数到10"
+    conten = "请完整的给出每种排序的c语言代码"
+    conten = """
     请详细解释以下几个问题，并提供相关的代码示例和详细的解释：
 
     1. 什么是快速排序算法？请详细解释其工作原理，并提供一个 Python 实现的代码示例。请确保代码包含注释，以便于理解每一步的操作。
@@ -185,27 +185,21 @@ def local_chat(
     """
     print("content:", content)
     while True:
-        try:
-            if loop % 40 == 0:
-                # content = input("继续？")
-                content = "n"
-                if content == "n":
-                    break
+        if loop % 2 == 0:
+            c = input("继续？")
+            if c == "n":
+                break
 
-            messages = [{"role": "user", "content": content}]
-            input_tensor = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt")
+        messages = [{"role": "user", "content": content}]
+        input_tensor = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt")
 
-            torch.set_default_dtype(torch.bfloat16)  # TODO: Remove this, replace dtype using config
-            if cache is not None:
-                cache.print_time()
-            generated = prefill_and_generate(model, tokenizer, input_tensor.cuda(), max_new_tokens, use_cuda_graph)
-            if cache is not None:
-                cache.print_time()
-        except Exception as e:
-            print(e)
-            print(loop)
-            loop += 1
-            continue
+        torch.set_default_dtype(torch.bfloat16)  # TODO: Remove this, replace dtype using config
+        if cache is not None:
+            cache.print_time()
+        generated = prefill_and_generate(model, tokenizer, input_tensor.cuda(), max_new_tokens, use_cuda_graph)
+        if cache is not None:
+            cache.print_time()
+        loop += 1
     if cache is not None:
         cache.print_time()
 

@@ -81,13 +81,13 @@ def local_chat(
     model_name = 0
     if model_name == 0:
         model_path = "/opt/pretrained_models/DeepSeek-V2-Lite-Chat"
-        gguf_path = "/home/syf/ktransformers/Deepseek-GGUF"
+        gguf_path = "/data/yanfansun/ktrans/ktransformers/Deepseek-GGUF"
     elif model_name == 1:
         model_path = "/opt/pretrained_models/Mixtral-8x7B-Instruct-v0.1"
-        gguf_path = "/home/syf/ktransformers/Mixtral-GGUF"
+        gguf_path = "/data/yanfansun/ktrans/ktransformers/Mixtral-GGUF"
     elif model_name == 2:
         model_path = "/opt/pretrained_models/Qwen2-57B-A14B-Instruct"
-        gguf_path = "/data/pretrained_models/Qwen-GGUF"
+        gguf_path = "/data/yanfansun/ktrans/ktransformers/Qwen-GGUF"
     torch.set_grad_enabled(False)
 
     Config().cpu_infer = cpu_infer
@@ -157,8 +157,55 @@ def local_chat(
     cache = KExpertsCache._instance
     loop = 1
     content = "你好，请从1数到10"
-    conten = "请完整的给出每种排序的c语言代码"
-    conten = """
+    content = "请完整的给出每种排序的c语言代码"
+    content = """
+    请详细解释以下几个问题，并提供相关的代码示例和详细的解释：
+
+    1. 什么是快速排序算法？请详细解释其工作原理，并提供一个 Python 实现的代码示例。请确保代码包含注释，以便于理解每一步的操作。
+
+    2. 在快速排序算法中，如何选择基准元素（pivot）？请解释不同的选择策略及其优缺点，并提供相应的代码示例。
+
+    3. 快速排序算法的时间复杂度和空间复杂度分别是多少？请详细解释其平均情况、最坏情况和最好情况，并提供相应的分析。
+
+    4. 请解释快速排序算法在实际应用中的优势和劣势。与其他排序算法（如归并排序、堆排序、插入排序等）相比，快速排序有哪些独特的优点和缺点？
+
+    5. 在处理大规模数据时，如何优化快速排序算法的性能？请提供一些常见的优化策略，并解释其原理和实现方法。
+
+    6. 请解释快速排序算法在多线程或并行计算中的应用。如何利用多线程技术来加速快速排序算法的执行？请提供相应的代码示例和详细解释。
+
+    7. 在 Python 中，如何使用内置的排序函数（如 sorted() 和 list.sort()）来实现快速排序？请解释这些函数的底层实现原理，并比较其与手动实现的快速排序算法的性能差异。
+
+    8. 请解释快速排序算法在不同编程语言中的实现差异。选择几种常见的编程语言（如 C++、Java、Python 等），并提供相应的代码示例和详细解释。
+
+    9. 在实际项目中，如何选择合适的排序算法？请提供一些实际案例，解释在不同场景下选择快速排序算法的原因，并比较其与其他排序算法的效果。
+
+    10. 请解释快速排序算法在处理特殊数据集（如几乎有序的数据、包含大量重复元素的数据等）时的表现。如何调整算法以提高其在这些特殊数据集上的性能？
+
+    请确保每个问题的回答都包含详细的解释、代码示例和相关的分析。谢谢！
+
+    请详细解释以下几个问题，并提供相关的代码示例和详细的解释：
+
+    1. 什么是快速排序算法？请详细解释其工作原理，并提供一个 Python 实现的代码示例。请确保代码包含注释，以便于理解每一步的操作。
+
+    2. 在快速排序算法中，如何选择基准元素（pivot）？请解释不同的选择策略及其优缺点，并提供相应的代码示例。
+
+    3. 快速排序算法的时间复杂度和空间复杂度分别是多少？请详细解释其平均情况、最坏情况和最好情况，并提供相应的分析。
+
+    4. 请解释快速排序算法在实际应用中的优势和劣势。与其他排序算法（如归并排序、堆排序、插入排序等）相比，快速排序有哪些独特的优点和缺点？
+
+    5. 在处理大规模数据时，如何优化快速排序算法的性能？请提供一些常见的优化策略，并解释其原理和实现方法。
+
+    6. 请解释快速排序算法在多线程或并行计算中的应用。如何利用多线程技术来加速快速排序算法的执行？请提供相应的代码示例和详细解释。
+
+    7. 在 Python 中，如何使用内置的排序函数（如 sorted() 和 list.sort()）来实现快速排序？请解释这些函数的底层实现原理，并比较其与手动实现的快速排序算法的性能差异。
+
+    8. 请解释快速排序算法在不同编程语言中的实现差异。选择几种常见的编程语言（如 C++、Java、Python 等），并提供相应的代码示例和详细解释。
+
+    9. 在实际项目中，如何选择合适的排序算法？请提供一些实际案例，解释在不同场景下选择快速排序算法的原因，并比较其与其他排序算法的效果。
+
+    10. 请解释快速排序算法在处理特殊数据集（如几乎有序的数据、包含大量重复元素的数据等）时的表现。如何调整算法以提高其在这些特殊数据集上的性能？
+
+    请确保每个问题的回答都包含详细的解释、代码示例和相关的分析。谢谢！
     请详细解释以下几个问题，并提供相关的代码示例和详细的解释：
 
     1. 什么是快速排序算法？请详细解释其工作原理，并提供一个 Python 实现的代码示例。请确保代码包含注释，以便于理解每一步的操作。
@@ -185,21 +232,23 @@ def local_chat(
     """
     print("content:", content)
     while True:
-        if loop % 2 == 0:
-            c = input("继续？")
-            if c == "n":
-                break
+        try:
+            if loop % 2 == 0:
+                c = input("继续？")
+                if c == "n":
+                    break
 
-        messages = [{"role": "user", "content": content}]
-        input_tensor = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt")
+            messages = [{"role": "user", "content": content}]
+            input_tensor = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt")
 
-        torch.set_default_dtype(torch.bfloat16)  # TODO: Remove this, replace dtype using config
-        if cache is not None:
-            cache.print_time()
-        generated = prefill_and_generate(model, tokenizer, input_tensor.cuda(), max_new_tokens, use_cuda_graph)
-        if cache is not None:
-            cache.print_time()
-        loop += 1
+            torch.set_default_dtype(torch.bfloat16)  # TODO: Remove this, replace dtype using config
+            generated = prefill_and_generate(model, tokenizer, input_tensor.cuda(), max_new_tokens, use_cuda_graph)
+            loop += 1
+        except Exception as e:
+            print(e)
+            if cache is not None:
+                cache.print_time()
+            loop += 1
     if cache is not None:
         cache.print_time()
 
@@ -225,7 +274,7 @@ def clear_timeout():
 
 if __name__ == "__main__":
     # fire.Fire(local_chat)
-    set_timeout(6000)
+    # set_timeout(6000)
     # try:
     local_chat()
     # except Exception as e:
@@ -238,3 +287,10 @@ if __name__ == "__main__":
     # finally:
     #     clear_timeout()
     #     os._exit(0)
+
+
+# prompt eval duration: 4.180618047714233s
+# prompt eval rate:     119.83874017716673 tokens/s
+# eval count:           1000 token(s)
+# eval duration:        75.55258226394653s
+# eval rate:            13.235814978586072 tokens/s

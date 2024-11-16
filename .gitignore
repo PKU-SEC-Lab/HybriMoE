@@ -21,3 +21,6 @@ ktransformers/server_test1.db
 img/
 *.log
 *GGUF
+vtune*
+ktransformers/dataset
+ktransformers/tasks.jsonl

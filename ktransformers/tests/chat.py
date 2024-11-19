@@ -13,20 +13,22 @@
 # limitations under the License.
 
 import os
+import platform
 import sys
 import time
-import argparse
+import threading
+
 
 project_dir = os.path.dirname(os.path.dirname(__file__))
 sys.path.insert(0, project_dir)
 import torch
+import torch.nn as nn
 import logging
 from transformers import (
     AutoTokenizer,
     AutoConfig,
     AutoModelForCausalLM,
     GenerationConfig,
-    TextStreamer,
 )
 from ktransformers.operators.experts import KExpertsCache
 from ktransformers.optimize.optimize import optimize_and_load_gguf
@@ -70,15 +72,13 @@ def local_chat(
     # model_path: str,
     optimize_rule_path: str = None,
     # gguf_path: str = None,
-    max_new_tokens: int = 10,
+    max_new_tokens: int = 1000,
     cpu_infer: int = Config().cpu_infer,
     use_cuda_graph: bool = False,
-    model_name: int = 0,
-    optimize_rule_name: str = None,
-    load_size: int = None,
 ):
-    start = time.time()
     # switch model to set path
+
+    model_name = 2
     if model_name == 0:
         print("using DeepseekV2ForCausalLM")
         model_path = "/opt/pretrained_models/DeepSeek-V2-Lite-Chat"
@@ -121,26 +121,20 @@ def local_chat(
 
     if gguf_path is None:
         gguf_path = input(
-            "please input the path of your gguf file(gguf file in the dir containing input gguf file must all belong to"
-            " current model):"
+            "please input the path of your gguf file(gguf file in the dir containing input gguf file must all"
+            " belong to current model):"
         )
 
     # setting
-    if load_size is None:
-        if model_name == 1:
-            load_size = [2] * config.num_hidden_layers
-        else:
-            load_size = [16] * config.num_hidden_layers
-    else:
-        load_size = [load_size] * config.num_hidden_layers
-    prefetch_size = 0
     if model_name == 1:
-        prefetch_size = 0
+        load_size = [2] * config.num_hidden_layers
     else:
-        prefetch_size = 0
+        load_size = [16] * config.num_hidden_layers
+    prefetch_size = 0
     start = time.time()
     config.load_size = load_size
     config.prefetch_size = prefetch_size
+    print("load_size:", load_size)
     optimize_and_load_gguf(
         model,
         optimize_rule_path,
@@ -161,112 +155,75 @@ def local_chat(
         print("using gpu")
     else:
         print("using cpu")
+
     # content = "write quick sort algorithm in python"
-    # 打开并读取tasks.jsonl文件
-    if model_name == 0:
-        t = "DeepseekV2"
-    elif model_name == 1:
-        t = "Mixtral"
-    elif model_name == 2:
-        t = "Qwen2Moe"
-    file_name = "result/new_" + t + "_" + str(load_size[0]) + ".txt"
-    # optimize_rule_name = optimize_rule_name[:-5]
-    # file_name = "result/" + optimize_rule_name + ".txt"
-    # file_name = "result/our_" + t + "_" + str(load_size[0]) + ".txt"
-    # file_name = "result/all.txt"
-    # file_name = "test.log"
-    with open("/data/yanfansun/ktrans/ktransformers/ktransformers/tasks_full.jsonl", "r", encoding="utf-8") as file:
-        # try:
-        totall_prefill_time = 0
-        cnt = 0
-        totall_tokens_generated = 0
-        totall_total_time = 0
-        lengths = [32, 128, 512, 1024]
-        # lengths = [128]
-        grand_total_prefill_time = 0
-        grand_total_tokens_generated = 0
-        grand_total_total_time = 0
-        cache = KExpertsCache._instance
-        for line in file:
-            # 解析每一行的字符串
-            content = line.strip()
-            print("content:", content)
-            print("cnt:", cnt)
+    cache = KExpertsCache._instance
+    loop = 1
+    content = "你好，请从1数到10"
+    # content = "请完整的给出每种排序的c语言代码"
+    content = "Write a story loosely related to legend of narcissus. Include vivid descriptions of characters and describe each scene in detail"
+
+    print("content:", content)
+    while True:
+        try:
+            if loop % 2 == 0:
+                c = input("继续？")
+                if c == "n":
+                    break
+
             messages = [{"role": "user", "content": content}]
             input_tensor = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt")
 
             torch.set_default_dtype(torch.bfloat16)  # TODO: Remove this, replace dtype using config
+            generated = prefill_and_generate(model, tokenizer, input_tensor.cuda(), max_new_tokens, use_cuda_graph)
+            loop += 1
+        except Exception as e:
+            print(e)
+            if cache is not None:
+                cache.print_time()
+            loop += 1
+    if cache is not None:
+        cache.print_time()
 
-            generated, prefill_time, tokens_generated, total_time = prefill_and_generate(
-                model, tokenizer, input_tensor.cuda(), max_new_tokens, use_cuda_graph
-            )
-            # cache.print_time()
-            if cnt > 0:
-                totall_prefill_time += prefill_time
-                totall_tokens_generated += tokens_generated
-                totall_total_time += total_time
-
-                grand_total_prefill_time += prefill_time
-                grand_total_tokens_generated += tokens_generated
-                grand_total_total_time += total_time
-
-            cnt += 1
-            if cnt % 10 == 1 and cnt > 1:
-                print(f"Total prefill time for last 10 iterations: {grand_total_prefill_time}")
-                print(f"Total tokens generated for last 10 iterations: {grand_total_tokens_generated}")
-                print(f"Total time for last 10 iterations: {grand_total_total_time}")
-
-                # 将结果写入文件
-                with open(file_name, "a") as f:
-                    f.write(
-                        f"Lengths: {lengths[cnt // 10 - 1]}\n"
-                        f"Total prefill time for last 10 iterations: {grand_total_prefill_time}\n"
-                        f"Total tokens generated for last 10 iterations: {grand_total_tokens_generated}\n"
-                        f"Total time for last 10 iterations: {grand_total_total_time}\n"
-                    )
-
-                # 重置累加器
-                grand_total_prefill_time = 0
-                grand_total_tokens_generated = 0
-                grand_total_total_time = 0
-
-    print(f"prompt eval duration: {totall_prefill_time/cnt}s")
-    print(f"eval count:           {totall_tokens_generated} token(s)")
-    print(f"eval duration:        {totall_total_time}s")
-    tokens_per_second = totall_tokens_generated / totall_total_time
-    print(f"eval rate:            {tokens_per_second} tokens/s")
     print("fin")
-    with open(file_name, "a") as f:
-        f.write(
-            "Summary:\n"
-            f"prompt eval duration: {totall_prefill_time/cnt}s\n"
-            f"eval count:           {totall_tokens_generated} token(s)\n"
-            f"eval duration:        {totall_total_time}s\n"
-            f"eval rate:            {tokens_per_second} tokens/s\n"
-        )
+
+
+import signal
+
+
+def timeout_handler(signum, frame):
+    print("程序超时，终止进程")
+    os.kill(os.getpid(), signal.SIGTERM)
+
+
+def set_timeout(seconds):
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(seconds)
+
+
+def clear_timeout():
+    signal.alarm(0)
 
 
 if __name__ == "__main__":
-    # 解析args
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model_name", type=int, default=None)
-    parser.add_argument("--optimize_rule_name", type=str, default=None)
-    parser.add_argument("--load_size", type=int, default=None)
-    model_name = parser.parse_args().model_name
-    optimize_rule_name = parser.parse_args().optimize_rule_name
-    if model_name is None:
-        model_name = 0
-    load_size = parser.parse_args().load_size
-    if optimize_rule_name is not None:
-        optimize_rule_path = ktransformer_rules_dir + optimize_rule_name
-    else:
-        optimize_rule_path = None
-    print("model_name:", model_name)
-    print("optimize_rule_name:", optimize_rule_name)
-    print("load_size:", load_size)
-    local_chat(
-        model_name=model_name,
-        optimize_rule_path=optimize_rule_path,
-        optimize_rule_name=optimize_rule_name,
-        load_size=load_size,
-    )
+    # fire.Fire(local_chat)
+    # set_timeout(6000)
+    # try:
+    local_chat()
+    # except Exception as e:
+    #     print(e)
+    #     clear_timeout()
+    #     # trace
+    #     import traceback
+
+    #     traceback.print_exc()
+    # finally:
+    #     clear_timeout()
+    #     os._exit(0)
+
+
+# prompt eval duration: 4.180618047714233s
+# prompt eval rate:     119.83874017716673 tokens/s
+# eval count:           1000 token(s)
+# eval duration:        75.55258226394653s
+# eval rate:            13.235814978586072 tokens/s

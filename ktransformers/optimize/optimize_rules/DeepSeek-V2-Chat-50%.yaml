@@ -4,15 +4,15 @@
     class: ktransformers.operators.RoPE.YarnRotaryEmbedding
     kwargs:
       generate_device: "cuda"
-      prefill_device: "cuda"
+      prefill_device: "cpu"
 - match:
-    name: "^model\\.layers\\.(?!.*self_attn\\.kv_b_proj).*$"  # regular expression 
+    name: "^model\\.layers\\.(?!.*self_attn).*$"  # regular expression 
     class: torch.nn.Linear  # only match modules matching name and class simultaneously
   replace:
     class: ktransformers.operators.linear.KTransformersLinear  # optimized Kernel on quantized data types
     kwargs:
       generate_device: "cuda"
-      prefill_device: "cuda"
+      prefill_device: "cpu"
       generate_op: "KLinearMarlin"
       prefill_op: "KLinearTorch"
 - match:
@@ -22,16 +22,30 @@
     class: ktransformers.operators.experts.KDeepseekV2MoE     # mlp module with custom forward function
     kwargs:
       generate_device: "cuda"
-      prefill_device: "cuda"
+      prefill_device: "cpu"
+
+
 - match:
-    name: "^model\\.layers\\..*\\.mlp\\.experts$"
+    name: "^model\\.layers\\.(0|[1-9]|1[0-3])\\.mlp\\.experts$"
+  replace:
+    class: ktransformers.operators.experts.KTransformersExperts     # custom MoE Kernel with expert paralleism
+    kwargs:
+      prefill_device: "cuda"
+      prefill_op: "KExpertsTorch"
+      generate_device: "cuda"
+      generate_op:  "KExpertsMarlin"
+      out_device: "cuda"
+  recursive: False # don't recursively inject submodules of this module
+
+- match:
+    name: "^model\\.layers\\.(1[4-9]|2[0-6])\\.mlp\\.experts$"
   replace:
     class: ktransformers.operators.experts.KTransformersExperts     # custom MoE Kernel with expert paralleism
     kwargs:
       prefill_device: "cuda"
       prefill_op: "KExpertsTorch"
       generate_device: "cpu"
-      generate_op: "KExpertsCPU"
+      generate_op:  "KExpertsCPU"
       out_device: "cuda"
   recursive: False # don't recursively inject submodules of this module
 - match:
@@ -40,13 +54,7 @@
     class: ktransformers.operators.attention.KDeepseekV2Attention # optimized MLA implementation
     kwargs:
       generate_device: "cuda"
-      prefill_device: "cuda"
-- match:
-    name: "^model$"
-  replace:
-    class: "ktransformers.operators.models.KDeepseekV2Model"
-    kwargs:
-      per_layer_prefill_intput_threshold: 0 # 0 is close layer wise prefill
+      prefill_device: "cpu"
 - match:
     name: "^model.embed_tokens"
   replace:

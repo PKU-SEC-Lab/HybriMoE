@@ -253,8 +253,7 @@ def prefill_and_generate(model, tokenizer, inputs, max_new_tokens=10000, use_cud
     print(f"eval duration:        {total_time}s")
     print(f"eval rate:            {tokens_per_second} tokens/s")
 
-    return tokens
-
+    return tokens, prefill_time, tokens_generated, total_time
 
 class InferenceState(enum.Enum):
     UNLOAD = 0

@@ -70,7 +70,7 @@ def local_chat(
     # model_path: str,
     optimize_rule_path: str = None,
     # gguf_path: str = None,
-    max_new_tokens: int = 10,
+    max_new_tokens: int = 1024,
     cpu_infer: int = Config().cpu_infer,
     use_cuda_graph: bool = False,
     model_name: int = 0,
@@ -82,26 +82,26 @@ def local_chat(
     if model_name == 0:
         print("using DeepseekV2ForCausalLM")
         model_path = "/opt/pretrained_models/DeepSeek-V2-Lite-Chat"
-        gguf_path = "/data/yanfansun/ktrans/ktransformers/Deepseek-GGUF"
+        gguf_path = "/data/home/yanfansun/ktrans/ktransformers/Deepseek-GGUF"
     elif model_name == 1:
         print("using MixtralForCausalLM")
         model_path = "/opt/pretrained_models/Mixtral-8x7B-Instruct-v0.1"
-        gguf_path = "/data/yanfansun/ktrans/ktransformers/Mixtral-GGUF"
+        gguf_path = "/data/home/yanfansun/ktrans/ktransformers/Mixtral-GGUF"
     elif model_name == 2:
         print("using Qwen2MoeForCausalLM")
         model_path = "/opt/pretrained_models/Qwen2-57B-A14B-Instruct"
-        gguf_path = "/data/yanfansun/ktrans/ktransformers/Qwen-GGUF"
+        gguf_path = "/data/home/yanfansun/ktrans/ktransformers/Qwen-GGUF"
     torch.set_grad_enabled(False)
 
     Config().cpu_infer = cpu_infer
-    print("cpu_infer:", Config().cpu_infer)
+    #print("cpu_infer:", Config().cpu_infer)
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
     torch.set_default_dtype(config.torch_dtype)
 
     with torch.device("meta"):
         if config.architectures[0] in custom_models:
-            print("using custom modeling_xxx.py.")
+            #print("using custom modeling_xxx.py.")
             if "Qwen2Moe" in config.architectures[0]:  # Qwen2Moe must use flash_attention_2 to avoid overflow.
                 config._attn_implementation = "flash_attention_2"
             if "Mixtral" in config.architectures[0]:
@@ -114,7 +114,7 @@ def local_chat(
 
     if optimize_rule_path is None:
         if config.architectures[0] in default_optimize_rules:
-            print("using default_optimize_rule for", config.architectures[0])
+            #print("using default_optimize_rule for", config.architectures[0])
             optimize_rule_path = default_optimize_rules[config.architectures[0]]
         else:
             optimize_rule_path = input("please input the path of your rule file(yaml file containing optimize rules):")
@@ -130,7 +130,7 @@ def local_chat(
         if model_name == 1:
             load_size = [2] * config.num_hidden_layers
         else:
-            load_size = [16] * config.num_hidden_layers
+            load_size = [32] * config.num_hidden_layers
     else:
         load_size = [load_size] * config.num_hidden_layers
     prefetch_size = 0
@@ -148,7 +148,7 @@ def local_chat(
         config,
     )
     end = time.time()
-    print("optimize_and_load_gguf time:", end - start)
+    #print("optimize_and_load_gguf time:", end - start)
 
     model.generation_config = GenerationConfig.from_pretrained(model_path)
     if model.generation_config.pad_token_id is None:
@@ -175,75 +175,93 @@ def local_chat(
     # file_name = "result/our_" + t + "_" + str(load_size[0]) + ".txt"
     # file_name = "result/all.txt"
     # file_name = "test.log"
-    with open("/data/yanfansun/ktrans/ktransformers/ktransformers/tasks_full.jsonl", "r", encoding="utf-8") as file:
-        # try:
-        totall_prefill_time = 0
-        cnt = 0
-        totall_tokens_generated = 0
-        totall_total_time = 0
-        lengths = [32, 128, 512, 1024]
-        # lengths = [128]
-        grand_total_prefill_time = 0
-        grand_total_tokens_generated = 0
-        grand_total_total_time = 0
-        cache = KExpertsCache._instance
-        for line in file:
-            # 解析每一行的字符串
-            content = line.strip()
-            print("content:", content)
-            print("cnt:", cnt)
-            messages = [{"role": "user", "content": content}]
-            input_tensor = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt")
 
-            torch.set_default_dtype(torch.bfloat16)  # TODO: Remove this, replace dtype using config
+    #"user input: "
+    print("User: ", end="")
+    # user_input = input()
+    user_input = "write quick sort algorithm in python"
+    #print("\n")
+    messages = [{"role": "user", "content":user_input}]
+    input_tensor = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt")
 
-            generated, prefill_time, tokens_generated, total_time = prefill_and_generate(
-                model, tokenizer, input_tensor.cuda(), max_new_tokens, use_cuda_graph
-            )
-            # cache.print_time()
-            if cnt > 0:
-                totall_prefill_time += prefill_time
-                totall_tokens_generated += tokens_generated
-                totall_total_time += total_time
+    torch.set_default_dtype(torch.bfloat16)  # TODO: Remove this, replace dtype using config
 
-                grand_total_prefill_time += prefill_time
-                grand_total_tokens_generated += tokens_generated
-                grand_total_total_time += total_time
+    generated, prefill_time, tokens_generated, total_time = prefill_and_generate(
+        model, tokenizer, input_tensor.cuda(), max_new_tokens, use_cuda_graph
+    )
 
-            cnt += 1
-            if cnt % 10 == 1 and cnt > 1:
-                print(f"Total prefill time for last 10 iterations: {grand_total_prefill_time}")
-                print(f"Total tokens generated for last 10 iterations: {grand_total_tokens_generated}")
-                print(f"Total time for last 10 iterations: {grand_total_total_time}")
 
-                # 将结果写入文件
-                with open(file_name, "a") as f:
-                    f.write(
-                        f"Lengths: {lengths[cnt // 10 - 1]}\n"
-                        f"Total prefill time for last 10 iterations: {grand_total_prefill_time}\n"
-                        f"Total tokens generated for last 10 iterations: {grand_total_tokens_generated}\n"
-                        f"Total time for last 10 iterations: {grand_total_total_time}\n"
-                    )
+    # with open(
+    #     "/data/home/yanfansun/ktrans/ktransformers/ktransformers/tasks_full.jsonl", "r", encoding="utf-8"
+    # ) as file:
+    #     # try:
+    #     totall_prefill_time = 0
+    #     cnt = 0
+    #     totall_tokens_generated = 0
+    #     totall_total_time = 0
+    #     lengths = [32, 128, 512, 1024]
+    #     # lengths = [128]
+    #     grand_total_prefill_time = 0
+    #     grand_total_tokens_generated = 0
+    #     grand_total_total_time = 0
+    #     cache = KExpertsCache._instance
+    #     for line in file:
+    #         # 解析每一行的字符串
+    #         content = line.strip()
+    #         print("content:", content)
+    #         print("cnt:", cnt)
+    #         messages = [{"role": "user", "content": content}]
+    #         input_tensor = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt")
 
-                # 重置累加器
-                grand_total_prefill_time = 0
-                grand_total_tokens_generated = 0
-                grand_total_total_time = 0
+    #         torch.set_default_dtype(torch.bfloat16)  # TODO: Remove this, replace dtype using config
 
-    print(f"prompt eval duration: {totall_prefill_time/cnt}s")
-    print(f"eval count:           {totall_tokens_generated} token(s)")
-    print(f"eval duration:        {totall_total_time}s")
-    tokens_per_second = totall_tokens_generated / totall_total_time
-    print(f"eval rate:            {tokens_per_second} tokens/s")
-    print("fin")
-    with open(file_name, "a") as f:
-        f.write(
-            "Summary:\n"
-            f"prompt eval duration: {totall_prefill_time/cnt}s\n"
-            f"eval count:           {totall_tokens_generated} token(s)\n"
-            f"eval duration:        {totall_total_time}s\n"
-            f"eval rate:            {tokens_per_second} tokens/s\n"
-        )
+    #         generated, prefill_time, tokens_generated, total_time = prefill_and_generate(
+    #             model, tokenizer, input_tensor.cuda(), max_new_tokens, use_cuda_graph
+    #         )
+    #         # cache.print_time()
+    #         if cnt > 0:
+    #             totall_prefill_time += prefill_time
+    #             totall_tokens_generated += tokens_generated
+    #             totall_total_time += total_time
+
+    #             grand_total_prefill_time += prefill_time
+    #             grand_total_tokens_generated += tokens_generated
+    #             grand_total_total_time += total_time
+
+    #         cnt += 1
+    #         if cnt % 10 == 1 and cnt > 1:
+    #             print(f"Total prefill time for last 10 iterations: {grand_total_prefill_time}")
+    #             print(f"Total tokens generated for last 10 iterations: {grand_total_tokens_generated}")
+    #             print(f"Total time for last 10 iterations: {grand_total_total_time}")
+
+    #             # 将结果写入文件
+    #             with open(file_name, "a") as f:
+    #                 f.write(
+    #                     f"Lengths: {lengths[cnt // 10 - 1]}\n"
+    #                     f"Total prefill time for last 10 iterations: {grand_total_prefill_time}\n"
+    #                     f"Total tokens generated for last 10 iterations: {grand_total_tokens_generated}\n"
+    #                     f"Total time for last 10 iterations: {grand_total_total_time}\n"
+    #                 )
+
+    #             # 重置累加器
+    #             grand_total_prefill_time = 0
+    #             grand_total_tokens_generated = 0
+    #             grand_total_total_time = 0
+
+    # print(f"prompt eval duration: {totall_prefill_time/cnt}s")
+    # print(f"eval count:           {totall_tokens_generated} token(s)")
+    # print(f"eval duration:        {totall_total_time}s")
+    # tokens_per_second = totall_tokens_generated / totall_total_time
+    # print(f"eval rate:            {tokens_per_second} tokens/s")
+    # print("fin")
+    # with open(file_name, "a") as f:
+    #     f.write(
+    #         "Summary:\n"
+    #         f"prompt eval duration: {totall_prefill_time/cnt}s\n"
+    #         f"eval count:           {totall_tokens_generated} token(s)\n"
+    #         f"eval duration:        {totall_total_time}s\n"
+    #         f"eval rate:            {tokens_per_second} tokens/s\n"
+    #     )
 
 
 if __name__ == "__main__":
@@ -255,7 +273,7 @@ if __name__ == "__main__":
     model_name = parser.parse_args().model_name
     optimize_rule_name = parser.parse_args().optimize_rule_name
     if model_name is None:
-        model_name = 0
+        model_name = 2
     load_size = parser.parse_args().load_size
     if optimize_rule_name is not None:
         optimize_rule_path = ktransformer_rules_dir + optimize_rule_name

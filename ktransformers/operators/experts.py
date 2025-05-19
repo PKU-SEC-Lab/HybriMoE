@@ -525,13 +525,9 @@ class KExpertsMarlin(KExpertsBase):
         cpu_idxs, gpu_idxs, cpu_indexes = self.cache.calc_experts(
             load_idxs, unload_idxs, org_indexes, generate, id_counts
         )
-        # 提前加载需要使用的专家权重
-        # self.cache.wait_prefetch()
+        self.cache.wait_prefetch()
         if not generate:
             idx_top_x_list = [torch.where(expert_mask[expert_idx]) for expert_idx in range(self.expert_num)]
-            expert_weights, sorted_idx = self.cache.get_experts_weights(
-                gpu_idxs, self.layer_idx, self.loading_lock, True
-            )
             if len(cpu_idxs) != 0:
                 cpu_experts_idxs = [[] for _ in range(input_tensor.size(0))]
                 cpu_indexes = [[] for _ in range(input_tensor.size(0))]
@@ -555,6 +551,10 @@ class KExpertsMarlin(KExpertsBase):
                     cpu_weights[i] = weights[i][cpu_indexes[i]]
 
                 self.cpu_experts.submit(input_tensor, cpu_experts_idxs, cpu_weights, shared_experts, size_per_token)
+            expert_weights, sorted_idx = self.cache.get_experts_weights(
+                gpu_idxs, self.layer_idx, self.loading_lock, True
+            )
+
             for expert_idx in sorted_idx:
                 idx, top_x = idx_top_x_list[expert_idx]
                 current_state = input_tensor[None, top_x].squeeze(0)
@@ -589,7 +589,7 @@ class KExpertsMarlin(KExpertsBase):
             final_hidden_states += shared_out
         if len(gpu_idxs) != 0:
             expert_weights, sorted_idx = self.cache.get_experts_weights(gpu_idxs, self.layer_idx, self.loading_lock)
-            # self.cache.prefetch_expert(layer_idx=self.layer_idx)
+            self.cache.prefetch_expert(layer_idx=self.layer_idx)
             for expert_idx in sorted_idx:
                 idx, top_x = torch.where(expert_mask[expert_idx])
                 current_state = input_tensor[None, top_x].squeeze(0)
@@ -864,7 +864,7 @@ class KExpertsCache:
             self.usage_count = []
             for layer in range(0, config.num_hidden_layers):
                 self.usage_count.append([0] * self.expert_num_per_layer)
-            self.prefetch_lock = [[torch.cuda.Event() for _ in range(3)] for _ in range(self.prefetch_size)]
+            self.prefetch_lock = [torch.cuda.Event() for _ in range(3)]
             self.prefetching = False
             self.hits = 0
             self.misses = 0
@@ -1057,14 +1057,13 @@ class KExpertsCache:
                 self.load_expert_weights(
                     expert_uid,
                     non_blocking=True,
-                    loading_lock=self.prefetch_lock[idx],
+                    loading_lock=self.prefetch_lock,
                     stream=self.prefetch_stream,
                 )
 
     def wait_prefetch(self):
-        for lock in self.prefetch_lock:
-            for l in lock:
-                l.wait()
+        for l in self.prefetch_lock:
+            l.wait()
         self.prefetching = False
 
     def get_hits_and_misses(self):
@@ -1131,8 +1130,8 @@ class KExpertsCache:
             # cut = int(cut)
             # cpu_idxs = all_idxs[cut:]
             # gpu_idxs = all_idxs[:cut]
-            # return self.calc_prefill(load_idxs, unload_idxs, id_counts)
-            return [], all_idxs, org_indexes
+            return self.calc_prefill(load_idxs, unload_idxs, id_counts)
+            return cpu_idxs, gpu_idxs, org_indexes[cut:] + org_indexes[:cut]
         selected_num = len(load_idxs) + len(unload_idxs)
         selected_num += 1
 
@@ -1201,8 +1200,8 @@ class KExpertsCache:
 
     def deepseek_cpu_time(self, token_num):
         # deepseek 1 * token_num
-        # mixtral 0.4 * token_num
-        coef = "1 * {token_num}"
+        # mixtral 0.2 * token_num
+        coef = "0.2 * {token_num}"
         intercept = 0.79
         return eval(coef.format(token_num=token_num)), intercept
 

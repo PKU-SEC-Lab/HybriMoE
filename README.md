@@ -66,7 +66,7 @@ If our work assists your research, feel free to give us a star ⭐ or cite us us
   journal={arXiv preprint arXiv:2504.05897},
   year={2025}
 }
-
+```
 ## Contact
 If you have any questions, please raise a GitHub issue or contact us via email zsz@stu.pku.edu.cn.
 

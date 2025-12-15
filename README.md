@@ -54,7 +54,7 @@ wget https://huggingface.co/mzwing/DeepSeek-V2-Lite-Chat-GGUF/resolve/main/DeepS
 
 ### Running Example
 ```shell
-python ktransformers/local_chat.py --model_path deepseek-ai/DeepSeek-V2-Lite-Chat --gguf_path ./DeepSeek-V2-Lite-Chat-GGUF --cache_size 16 --prefetch_size 0 --optimize_rule_path ktransformers/optimize/optimize_rules/DeepSeek-V2-Chat.yaml
+python ktransformers/local_chat.py --model_path deepseek-ai/DeepSeek-V2-Lite-Chat --gguf_path ./DeepSeek-V2-Lite-Chat-GGUF --cache_size 16 --prefetch_size 0 --optimize_rule_path ktransformers/optimize/optimize_rules/DeepSeek-V2-Chat-gpu.yaml
 ```
 
 ## Citation
